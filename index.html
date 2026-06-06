@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Разбор ресторана · GuestUP</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+:root {
+  --gold: #C9A84C;
+  --gold-light: #E2C878;
+  --dark: #0F0D0A;
+  --dark2: #1A1712;
+  --dark3: #242018;
+  --text: #EDE8DF;
+  --muted: #8A836F;
+  --border: #2E2A22;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--dark);
+  color: var(--text);
+  font-family: 'DM Sans', sans-serif;
+  font-weight: 300;
+  min-height: 100vh;
+}
+body::before {
+  content: '';
+  position: fixed; inset: 0;
+  background:
+    radial-gradient(ellipse at 20% 20%, rgba(201,168,76,0.06) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 80%, rgba(201,168,76,0.04) 0%, transparent 50%);
+  pointer-events: none; z-index: 0;
+}
+.wrap {
+  position: relative; z-index: 1;
+  max-width: 660px; margin: 0 auto;
+  padding: 48px 24px 80px;
+}
+
+/* HEADER */
+.header { text-align: center; margin-bottom: 48px; }
+.logo { display: inline-flex; align-items: center; gap: 10px; margin-bottom: 28px; }
+.logo-hex {
+  width: 34px; height: 34px; background: var(--gold);
+  clip-path: polygon(50% 0%,100% 25%,100% 75%,50% 100%,0% 75%,0% 25%);
+}
+.logo-text {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 21px; font-weight: 600;
+  color: var(--gold); letter-spacing: 0.08em;
+}
+.h-title {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 40px; font-weight: 400; line-height: 1.15;
+  margin-bottom: 10px;
+}
+.h-title em { font-style: italic; color: var(--gold); }
+.h-sub { font-size: 12px; color: var(--muted); letter-spacing: 0.07em; text-transform: uppercase; }
+
+/* PROGRESS */
+.prog-wrap { margin-bottom: 36px; }
+.prog-top { display: flex; justify-content: space-between; margin-bottom: 10px; font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+.prog-top span:last-child { color: var(--gold); font-weight: 500; }
+.prog-bar { height: 2px; background: var(--border); border-radius: 2px; overflow: hidden; }
+.prog-fill { height: 100%; background: linear-gradient(90deg, var(--gold), var(--gold-light)); transition: width 0.4s ease; }
+
+/* STEPS */
+.step { display: none; animation: fadeUp 0.35s ease both; }
+.step.active { display: block; }
+@keyframes fadeUp { from { opacity:0; transform: translateY(10px); } to { opacity:1; transform: translateY(0); } }
+
+.step-num { font-size: 11px; color: var(--gold); letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 6px; font-weight: 500; }
+.step-title { font-family: 'Cormorant Garamond', serif; font-size: 28px; font-weight: 400; margin-bottom: 24px; line-height: 1.2; }
+
+/* CARD */
+.card { background: var(--dark2); border: 1px solid var(--border); border-radius: 4px; padding: 26px; margin-bottom: 12px; }
+.field { margin-bottom: 20px; }
+.field:last-child { margin-bottom: 0; }
+.lbl { display: block; font-size: 11px; color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 8px; font-weight: 500; }
+
+input[type=text], input[type=email], input[type=tel], textarea, select {
+  width: 100%; background: var(--dark3);
+  border: 1px solid var(--border); border-radius: 3px;
+  padding: 11px 13px; color: var(--text);
+  font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 300;
+  outline: none; transition: border-color 0.2s; -webkit-appearance: none;
+}
+input:focus, textarea:focus, select:focus { border-color: var(--gold); }
+textarea { resize: vertical; min-height: 84px; line-height: 1.5; }
+select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='7' viewBox='0 0 12 7'%3E%3Cpath d='M1 1l5 4.5L11 1' stroke='%238A836F' stroke-width='1.4' fill='none'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 13px center;
+  padding-right: 34px; cursor: pointer;
+}
+
+/* OPTIONS */
+.opts { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+.opts.col1 { grid-template-columns: 1fr; }
+.opt {
+  padding: 10px 13px; background: var(--dark3);
+  border: 1px solid var(--border); border-radius: 3px;
+  font-size: 13px; color: var(--muted); cursor: pointer;
+  transition: all 0.18s; user-select: none; line-height: 1.35;
+}
+.opt:hover { border-color: #3E3A32; color: var(--text); }
+.opt.sel { border-color: var(--gold); color: var(--gold); background: rgba(201,168,76,0.08); }
+
+/* SLIDER */
+.slider-val { text-align: center; font-family: 'Cormorant Garamond', serif; font-size: 26px; color: var(--gold); margin-bottom: 8px; }
+input[type=range] {
+  -webkit-appearance: none; width: 100%; height: 2px;
+  background: var(--border); border: none; border-radius: 2px; outline: none; cursor: pointer; padding: 0;
+}
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 16px; height: 16px;
+  background: var(--gold); border-radius: 50%;
+}
+.slider-lbl { display: flex; justify-content: space-between; font-size: 10px; color: var(--muted); margin-top: 6px; }
+
+.divider { height: 1px; background: var(--border); margin: 18px 0; }
+.hint { font-size: 11px; color: var(--muted); line-height: 1.6; }
+
+/* NAV */
+.nav { display: flex; gap: 10px; margin-top: 24px; }
+.btn {
+  padding: 13px 24px; border-radius: 3px;
+  font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 500;
+  cursor: pointer; border: none; transition: all 0.18s; letter-spacing: 0.04em;
+}
+.btn-primary { background: var(--gold); color: var(--dark); flex: 1; }
+.btn-primary:hover { background: var(--gold-light); }
+.btn-back { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+.btn-back:hover { border-color: #3E3A32; color: var(--text); }
+
+/* SUCCESS */
+.success { display: none; text-align: center; padding: 60px 0; }
+.success-icon {
+  width: 60px; height: 60px; border: 1px solid var(--gold); border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  margin: 0 auto 24px; font-size: 22px; color: var(--gold);
+  background: rgba(201,168,76,0.1);
+}
+.success-title { font-family: 'Cormorant Garamond', serif; font-size: 34px; margin-bottom: 12px; }
+.success-sub { font-size: 14px; color: var(--muted); line-height: 1.7; max-width: 340px; margin: 0 auto 28px; }
+.btn-wa {
+  display: inline-flex; align-items: center; gap: 10px;
+  background: #25D366; color: #fff;
+  padding: 14px 28px; border-radius: 3px;
+  font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 500;
+  text-decoration: none; transition: background 0.2s;
+}
+.btn-wa:hover { background: #1ebe5c; }
+.btn-wa svg { width: 18px; height: 18px; fill: #fff; }
+
+@media (max-width: 480px) {
+  .h-title { font-size: 30px; }
+  .opts { grid-template-columns: 1fr; }
+  .wrap { padding: 28px 16px 60px; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- HEADER -->
+  <div class="header">
+    <div class="logo">
+      <div class="logo-hex"></div>
+      <span class="logo-text">GuestUP</span>
+    </div>
+    <h1 class="h-title">Разбор <em>ресторана</em></h1>
+    <p class="h-sub">Бриф для AI-аудита · Ян Ильченко</p>
+  </div>
+
+  <!-- PROGRESS -->
+  <div class="prog-wrap" id="progWrap">
+    <div class="prog-top">
+      <span id="progLabel">Шаг 1 из 6</span>
+      <span id="progPct">16%</span>
+    </div>
+    <div class="prog-bar"><div class="prog-fill" id="progFill" style="width:16%"></div></div>
+  </div>
+
+  <!-- ШАГ 1 -->
+  <div class="step active" id="s1">
+    <div class="step-num">Блок I</div>
+    <h2 class="step-title">О заведении</h2>
+    <div class="card">
+      <div class="field">
+        <label class="lbl">Название ресторана</label>
+        <input type="text" id="name" placeholder="La Maison, Craft Bar...">
+      </div>
+      <div class="field">
+        <label class="lbl">Город</label>
+        <input type="text" id="city" placeholder="Алматы, Астана, Москва...">
+      </div>
+      <div class="field">
+        <label class="lbl">Формат заведения</label>
+        <div class="opts" id="format"></div>
+      </div>
+      <div class="field">
+        <label class="lbl">Кухня / концепция</label>
+        <input type="text" id="cuisine" placeholder="Итальянская, авторская, азиатская...">
+      </div>
+      <div class="field">
+        <label class="lbl">Посадочных мест</label>
+        <select id="seats">
+          <option value="">— выберите —</option>
+          <option>До 30</option><option>30–60</option><option>60–100</option>
+          <option>100–200</option><option>Более 200</option>
+        </select>
+      </div>
+    </div>
+    <div class="nav"><button class="btn btn-primary" onclick="go(1,2)">Далее →</button></div>
+  </div>
+
+  <!-- ШАГ 2 -->
+  <div class="step" id="s2">
+    <div class="step-num">Блок II</div>
+    <h2 class="step-title">Показатели бизнеса</h2>
+    <div class="card">
+      <div class="field">
+        <label class="lbl">Средний чек (на гостя)</label>
+        <select id="avgCheck">
+          <option value="">— выберите —</option>
+          <option>До 3 000 ₸</option><option>3 000–7 000 ₸</option>
+          <option>7 000–15 000 ₸</option><option>15 000–30 000 ₸</option><option>Более 30 000 ₸</option>
+        </select>
+      </div>
+      <div class="field">
+        <label class="lbl">Заполняемость зала</label>
+        <div class="slider-val" id="loadVal">50%</div>
+        <input type="range" id="load" min="0" max="100" step="5" value="50"
+          oninput="document.getElementById('loadVal').textContent=this.value+'%'">
+        <div class="slider-lbl"><span>0%</span><span>50%</span><span>100%</span></div>
+      </div>
+      <div class="field">
+        <label class="lbl">Рейтинг на 2GIS / Google</label>
+        <input type="text" id="rating" placeholder="4.2, 3.8...">
+      </div>
+      <div class="field">
+        <label class="lbl">Количество отзывов</label>
+        <select id="reviews">
+          <option value="">— выберите —</option>
+          <option>До 50</option><option>50–200</option><option>200–500</option>
+          <option>500–1000</option><option>Более 1000</option>
+        </select>
+      </div>
+    </div>
+    <div class="nav">
+      <button class="btn btn-back" onclick="go(2,1)">← Назад</button>
+      <button class="btn btn-primary" onclick="go(2,3)">Далее →</button>
+    </div>
+  </div>
+
+  <!-- ШАГ 3 -->
+  <div class="step" id="s3">
+    <div class="step-num">Блок III</div>
+    <h2 class="step-title">Сервис и персонал</h2>
+    <div class="card">
+      <div class="field">
+        <label class="lbl">Слабые места (можно несколько)</label>
+        <div class="opts col1" id="weak"></div>
+      </div>
+      <div class="divider"></div>
+      <div class="field">
+        <label class="lbl">Есть стандарты обслуживания?</label>
+        <div class="opts" id="stds"></div>
+      </div>
+    </div>
+    <div class="nav">
+      <button class="btn btn-back" onclick="go(3,2)">← Назад</button>
+      <button class="btn btn-primary" onclick="go(3,4)">Далее →</button>
+    </div>
+  </div>
+
+  <!-- ШАГ 4 -->
+  <div class="step" id="s4">
+    <div class="step-num">Блок IV</div>
+    <h2 class="step-title">Маркетинг и гости</h2>
+    <div class="card">
+      <div class="field">
+        <label class="lbl">Основной канал привлечения</label>
+        <div class="opts" id="channel"></div>
+      </div>
+      <div class="divider"></div>
+      <div class="field">
+        <label class="lbl">Ведёте базу гостей?</label>
+        <div class="opts" id="crm"></div>
+      </div>
+      <div class="divider"></div>
+      <div class="field">
+        <label class="lbl">Программа лояльности?</label>
+        <div class="opts" id="loyalty"></div>
+      </div>
+    </div>
+    <div class="nav">
+      <button class="btn btn-back" onclick="go(4,3)">← Назад</button>
+      <button class="btn btn-primary" onclick="go(4,5)">Далее →</button>
+    </div>
+  </div>
+
+  <!-- ШАГ 5 -->
+  <div class="step" id="s5">
+    <div class="step-num">Блок V</div>
+    <h2 class="step-title">Главная задача</h2>
+    <div class="card">
+      <div class="field">
+        <label class="lbl">Что мешает росту прямо сейчас?</label>
+        <textarea id="problem" placeholder="Падает выручка по будням, гости не возвращаются, персонал не продаёт..."></textarea>
+      </div>
+      <div class="field">
+        <label class="lbl">Цель через 3 месяца</label>
+        <textarea id="goal" placeholder="Конкретный результат..."></textarea>
+      </div>
+      <div class="field">
+        <label class="lbl">Пробовали уже что-то решать?</label>
+        <div class="opts col1" id="tried"></div>
+      </div>
+    </div>
+    <div class="nav">
+      <button class="btn btn-back" onclick="go(5,4)">← Назад</button>
+      <button class="btn btn-primary" onclick="go(5,6)">Далее →</button>
+    </div>
+  </div>
+
+  <!-- ШАГ 6 -->
+  <div class="step" id="s6">
+    <div class="step-num">Блок VI</div>
+    <h2 class="step-title">Контакт</h2>
+    <div class="card">
+      <div class="field">
+        <label class="lbl">Ваше имя</label>
+        <input type="text" id="contactName" placeholder="Имя и фамилия">
+      </div>
+      <div class="field">
+        <label class="lbl">WhatsApp / Telegram</label>
+        <input type="tel" id="phone" placeholder="+7 777 000 00 00">
+      </div>
+      <div class="field">
+        <label class="lbl">Email (необязательно)</label>
+        <input type="email" id="email" placeholder="you@example.com">
+      </div>
+      <div class="field">
+        <label class="lbl">Удобное время для звонка</label>
+        <select id="callTime">
+          <option value="">— выберите —</option>
+          <option>Утром (9:00–12:00)</option><option>Днём (12:00–15:00)</option>
+          <option>Вечером (17:00–20:00)</option><option>В любое время</option>
+          <option>Напишу в мессенджер</option>
+        </select>
+      </div>
+      <div class="divider"></div>
+      <p class="hint">Данные используются только для подготовки аудита. Не передаются третьим лицам.</p>
+    </div>
+    <div class="nav">
+      <button class="btn btn-back" onclick="go(6,5)">← Назад</button>
+      <button class="btn btn-primary" onclick="submit()">Готово — отправить →</button>
+    </div>
+  </div>
+
+  <!-- SUCCESS -->
+  <div class="success" id="success">
+    <div class="success-icon">✓</div>
+    <h2 class="success-title">Бриф отправлен</h2>
+    <p class="success-sub">PDF скачался на ваше устройство.<br>Нажмите кнопку ниже — откроется WhatsApp с Яном.</p>
+    <a class="btn-wa" id="waLink" href="#" target="_blank">
+      <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+      Написать Яну в WhatsApp
+    </a>
+  </div>
+
+</div>
+
+<script>
+// ─── Данные формы ───────────────────────────────────────────
+const data = {
+  format: '', weak: [], stds: '',
+  channel: '', crm: '', loyalty: '', tried: ''
+};
+
+// ─── Опции ──────────────────────────────────────────────────
+const OPTIONS = {
+  format: { id:'format', multi:false, cols:2, items:['Fine / Casual dining','Бар / Паб','Кафе / Bistro','Dark kitchen / Доставка','Ресторан при отеле','Другое'] },
+  weak:   { id:'weak',   multi:true,  cols:1, items:['Скорость обслуживания','Знание меню официантами','Допродажи (апсейл)','Работа с жалобами','Встреча и проводы гостя','Командная работа зала','Чистота и порядок'] },
+  stds:   { id:'stds',   multi:false, cols:2, items:['Да, письменные','Только устные','Нет','В разработке'] },
+  channel:{ id:'channel',multi:false, cols:2, items:['Instagram / Reels','2GIS / Google Maps','Сарафанное радио','Таргет / реклама','Агрегаторы (Glovo)','Смешанный'] },
+  crm:    { id:'crm',    multi:false, cols:2, items:['Да, CRM','Excel / таблицы','Нет'] },
+  loyalty:{ id:'loyalty',multi:false, cols:2, items:['Да','Планируем','Нет'] },
+  tried:  { id:'tried',  multi:false, cols:1, items:['Да, не дало результата','Да, частично помогло','Нет, только начинаем'] },
+};
+
+function buildOpts(key) {
+  const cfg = OPTIONS[key];
+  const el = document.getElementById(cfg.id);
+  if (!el) return;
+  if (cfg.cols === 1) el.classList.add('col1');
+  cfg.items.forEach(item => {
+    const div = document.createElement('div');
+    div.className = 'opt';
+    div.textContent = item;
+    div.onclick = () => {
+      if (cfg.multi) {
+        div.classList.toggle('sel');
+        const idx = data[key].indexOf(item);
+        idx === -1 ? data[key].push(item) : data[key].splice(idx, 1);
+      } else {
+        el.querySelectorAll('.opt').forEach(d => d.classList.remove('sel'));
+        div.classList.add('sel');
+        data[key] = item;
+      }
+    };
+    el.appendChild(div);
+  });
+}
+
+Object.keys(OPTIONS).forEach(buildOpts);
+
+// ─── Навигация ───────────────────────────────────────────────
+const TOTAL = 6;
+function go(from, to) {
+  document.getElementById('s'+from).classList.remove('active');
+  document.getElementById('s'+to).classList.add('active');
+  const pct = Math.round((to / TOTAL) * 100);
+  document.getElementById('progFill').style.width = pct + '%';
+  document.getElementById('progLabel').textContent = 'Шаг ' + to + ' из ' + TOTAL;
+  document.getElementById('progPct').textContent = pct + '%';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// ─── Сбор данных ─────────────────────────────────────────────
+function collect() {
+  return {
+    'Название':        document.getElementById('name').value || '—',
+    'Город':           document.getElementById('city').value || '—',
+    'Формат':          data.format || '—',
+    'Кухня':           document.getElementById('cuisine').value || '—',
+    'Мест':            document.getElementById('seats').value || '—',
+    'Средний чек':     document.getElementById('avgCheck').value || '—',
+    'Заполняемость':   document.getElementById('load').value + '%',
+    'Рейтинг':         document.getElementById('rating').value || '—',
+    'Отзывов':         document.getElementById('reviews').value || '—',
+    'Слабые места':    data.weak.length ? data.weak.join(', ') : '—',
+    'Стандарты':       data.stds || '—',
+    'Канал':           data.channel || '—',
+    'База гостей':     data.crm || '—',
+    'Лояльность':      data.loyalty || '—',
+    'Проблема':        document.getElementById('problem').value || '—',
+    'Цель':            document.getElementById('goal').value || '—',
+    'Пробовали':       data.tried || '—',
+    'Контакт':         document.getElementById('contactName').value || '—',
+    'Телефон':         document.getElementById('phone').value || '—',
+    'Email':           document.getElementById('email').value || '—',
+    'Время звонка':    document.getElementById('callTime').value || '—',
+  };
+}
+
+// ─── Генерация PDF ───────────────────────────────────────────
+function makePDF(fields) {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  const W = 210, margin = 20;
+  let y = 0;
+
+  // Фон
+  doc.setFillColor(15, 13, 10);
+  doc.rect(0, 0, W, 297, 'F');
+
+  // Золотая полоса
+  doc.setFillColor(201, 168, 76);
+  doc.rect(0, 0, W, 14, 'F');
+
+  // Заголовок
+  doc.setTextColor(15, 13, 10);
+  doc.setFontSize(11);
+  doc.setFont('helvetica', 'bold');
+  doc.text('GUESTUP  ·  RAZVOR RESTORANA  ·  YAN ILCHENKO', margin, 9.5);
+
+  y = 32;
+  doc.setTextColor(201, 168, 76);
+  doc.setFontSize(22);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Bref: Razvor restorana', margin, y);
+
+  y += 5;
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(138, 131, 111);
+  const dt = new Date();
+  doc.text('Sformirovan: ' + dt.toLocaleDateString('ru-RU') + '  ' + dt.toLocaleTimeString('ru-RU', {hour:'2-digit',minute:'2-digit'}), margin, y);
+
+  y += 10;
+  doc.setDrawColor(46, 42, 34);
+  doc.setLineWidth(0.3);
+  doc.line(margin, y, W - margin, y);
+  y += 10;
+
+  // Секции
+  const sections = [
+    { title: 'I. O zavedenii', keys: ['Название','Город','Формат','Кухня','Мест'] },
+    { title: 'II. Pokazateli', keys: ['Средний чек','Заполняемость','Рейтинг','Отзывов'] },
+    { title: 'III. Servis', keys: ['Слабые места','Стандарты'] },
+    { title: 'IV. Marketing', keys: ['Канал','База гостей','Лояльность'] },
+    { title: 'V. Zadacha', keys: ['Проблема','Цель','Пробовали'] },
+    { title: 'VI. Kontakt', keys: ['Контакт','Телефон','Email','Время звонка'] },
+  ];
+
+  sections.forEach(sec => {
+    if (y > 255) { doc.addPage(); doc.setFillColor(15,13,10); doc.rect(0,0,W,297,'F'); y = 20; }
+
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(201, 168, 76);
+    doc.text(sec.title, margin, y);
+    y += 6;
+
+    sec.keys.forEach(k => {
+      if (y > 270) { doc.addPage(); doc.setFillColor(15,13,10); doc.rect(0,0,W,297,'F'); y = 20; }
+      const val = fields[k] || '—';
+      const lines = doc.splitTextToSize(val, 110);
+
+      doc.setFontSize(8.5);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(138, 131, 111);
+      doc.text(k + ':', margin, y);
+
+      doc.setTextColor(237, 232, 223);
+      doc.text(lines, 75, y);
+      y += Math.max(6, lines.length * 5.5);
+    });
+
+    y += 4;
+    doc.setDrawColor(46, 42, 34);
+    doc.line(margin, y, W - margin, y);
+    y += 8;
+  });
+
+  // Футер
+  doc.setFillColor(201, 168, 76);
+  doc.rect(0, 283, W, 14, 'F');
+  doc.setTextColor(15, 13, 10);
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'bold');
+  doc.text('guestup.kz  ·  +7 707 448 77 72  ·  yan@guestup.kz', margin, 291.5);
+
+  return doc;
+}
+
+// ─── Отправка ─────────────────────────────────────────────────
+function submit() {
+  const fields = collect();
+  const name = fields['Название'] !== '—' ? fields['Название'] : 'restoran';
+
+  // Генерируем и скачиваем PDF
+  const doc = makePDF(fields);
+  doc.save('bref-' + name.replace(/\s+/g,'-').toLowerCase() + '.pdf');
+
+  // Скрываем форму, показываем success
+  document.getElementById('s6').classList.remove('active');
+  document.getElementById('progWrap').style.display = 'none';
+  document.getElementById('success').style.display = 'block';
+
+  // WhatsApp ссылка — ТВОЙ номер
+  const waNum = '77074487772'; // ← номер без + и пробелов
+  const msg = encodeURIComponent('Ян, отправляю бриф по ресторану «' + fields['Название'] + '». PDF во вложении.');
+  document.getElementById('waLink').href = 'https://wa.me/' + waNum + '?text=' + msg;
+
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+</script>
+</body>
+</html>
