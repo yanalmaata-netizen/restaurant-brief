@@ -26,13 +26,75 @@ var COLS = ['№', 'Статус', 'Гость', 'Телефон', 'Дата', '
 // колонки, которые заполняет человек и которые нельзя затирать при пересборке
 var MANUAL = ['Статус', 'Заметка'];
 
-/** Разовая установка: создаёт лист и вешает автообновление. */
+/** Меню в самой таблице — чтобы не искать функции в редакторе скриптов. */
+function onOpen() {
+  SpreadsheetApp.getUi().createMenu('DIO')
+    .addItem('Собрать листы сейчас', 'rebuild')
+    .addItem('Проверить настройку', 'selfCheck')
+    .addToUi();
+}
+
+/**
+ * Показывает, что именно получилось: сколько заявок, сколько дублей схлопнулось,
+ * читается ли меню с сайта. Запускать можно сколько угодно раз.
+ */
+function selfCheck() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var out = [];
+
+  var src = ss.getSheetByName(SRC_SHEET);
+  if (!src) {
+    say_('Не найден лист «' + SRC_SHEET + '».\n\nПереименуйте его обратно или поправьте' +
+         ' строку SRC_SHEET в начале скрипта.');
+    return;
+  }
+  var raw = Math.max(0, src.getLastRow() - 1);
+  out.push('Строк в журнале: ' + raw);
+
+  rebuild();
+
+  var dst = ss.getSheetByName(DST_SHEET);
+  var kept = dst ? Math.max(0, dst.getLastRow() - 1) : 0;
+  out.push('Заявок после схлопывания дублей: ' + kept);
+  out.push('Лишних строк убрано: ' + Math.max(0, raw - kept));
+
+  if (dst && kept) {
+    var head = dst.getRange(1, 1, 1, COLS.length).getValues()[0];
+    var testAt = head.indexOf('Тест') + 1;
+    var tests = dst.getRange(2, testAt, kept, 1).getValues()
+      .filter(function (r) { return r[0] === 'тест'; }).length;
+    out.push('Из них помечено как обкатка: ' + tests);
+  }
+
+  try {
+    var menu = loadMenu_();
+    var n = 0;
+    for (var k in menu.byCode) n++;
+    out.push('Меню с сайта прочитано: ' + menu.cats.length + ' разделов, ' + n + ' блюд');
+  } catch (e) {
+    out.push('Меню с сайта НЕ прочиталось: ' + e.message);
+    out.push('Лист «' + KIT_SHEET + '» останется пустым.');
+  }
+
+  var kit = ss.getSheetByName(KIT_SHEET);
+  out.push('Строк для кухни по предстоящим банкетам: ' + (kit ? Math.max(0, kit.getLastRow() - 1) : 0));
+
+  say_(out.join('\n'));
+}
+
+function say_(text) {
+  try { SpreadsheetApp.getUi().alert(text); }
+  catch (e) { Logger.log(text); }   // запуск из редактора, без открытой таблицы
+}
+
+/** Разовая установка: собирает листы, вешает автообновление и меню. */
 function setup() {
   rebuild();
   ScriptApp.getProjectTriggers().forEach(function (t) {
     if (t.getHandlerFunction() === 'rebuild') ScriptApp.deleteTrigger(t);
   });
   ScriptApp.newTrigger('rebuild').timeBased().everyMinutes(REBUILD_EVERY_MIN).create();
+  selfCheck();
 }
 
 /** Пересобирает лист «Банкеты». Безопасно запускать сколько угодно раз. */
