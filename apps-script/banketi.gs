@@ -56,7 +56,9 @@ function bqSelfCheck() {
   var raw = Math.max(0, src.getLastRow() - 1);
   out.push('Строк в журнале: ' + raw);
 
+  var t0 = new Date().getTime();
   bqRebuild();
+  var tRebuild = new Date().getTime() - t0;
 
   var dst = ss.getSheetByName(BQ_DST_SHEET);
   var kept = dst ? Math.max(0, dst.getLastRow() - 1) : 0;
@@ -71,18 +73,28 @@ function bqSelfCheck() {
     out.push('Из них помечено как обкатка: ' + tests);
   }
 
+  var t1 = new Date().getTime();
   try {
     var menu = bqLoadMenu_();
     var n = 0;
     for (var k in menu.byCode) n++;
-    out.push('Меню с сайта прочитано: ' + menu.cats.length + ' разделов, ' + n + ' блюд');
+    out.push('Меню прочитано: ' + menu.cats.length + ' разделов, ' + n + ' блюд');
   } catch (e) {
-    out.push('Меню с сайта НЕ прочиталось: ' + e.message);
+    out.push('Меню НЕ прочиталось: ' + e.message);
     out.push('Лист «' + BQ_KIT_SHEET + '» останется пустым.');
   }
+  var tMenu = new Date().getTime() - t1;
+
+  var t2 = new Date().getTime();
+  try { bqRebuildKitchen(); } catch (e) { out.push('Кухонный лист: ' + e.message); }
+  var tKit = new Date().getTime() - t2;
 
   var kit = ss.getSheetByName(BQ_KIT_SHEET);
   out.push('Строк для кухни по предстоящим банкетам: ' + (kit ? Math.max(0, kit.getLastRow() - 1) : 0));
+
+  out.push('');
+  out.push('Время: «Банкеты» ' + Math.round(tRebuild / 1000) + ' с, меню ' +
+           Math.round(tMenu / 1000) + ' с, кухня ' + Math.round(tKit / 1000) + ' с.');
 
   bqSay_(out.join('\n'));
 }
@@ -94,15 +106,56 @@ function bqSay_(text) {
 
 /** Разовая установка: собирает листы, вешает автообновление и меню. */
 function bqSetup() {
-  bqRebuild();
-  ScriptApp.getProjectTriggers().forEach(function (t) {
-    var f = t.getHandlerFunction();
-    if (f === 'bqRebuild' || f === 'bqOnOpen') ScriptApp.deleteTrigger(t);
-  });
+  bqReset();                       // снять свои триггеры, если остались с прошлой попытки
   ScriptApp.newTrigger('bqRebuild').timeBased().everyMinutes(BQ_REBUILD_EVERY_MIN).create();
+  ScriptApp.newTrigger('bqRebuildKitchen').timeBased().everyHours(1).create();
   ScriptApp.newTrigger('bqOnOpen').forSpreadsheet(SpreadsheetApp.getActiveSpreadsheet())
     .onOpen().create();
-  bqSelfCheck();
+  bqSelfCheck();                   // пересборку делает он, второй раз не нужно
+}
+
+/** Снимает все свои триггеры. Боевой doPost не трогает. */
+function bqReset() {
+  var mine = { bqRebuild: 1, bqRebuildKitchen: 1, bqOnOpen: 1 };
+  var n = 0;
+  ScriptApp.getProjectTriggers().forEach(function (t) {
+    if (mine[t.getHandlerFunction()]) { ScriptApp.deleteTrigger(t); n++; }
+  });
+  return n;
+}
+
+/** Пересобирает лист «Состав заказа». Отдельно от «Банкетов» — ходит за меню в сеть. */
+function bqRebuildKitchen() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var dst = ss.getSheetByName(BQ_DST_SHEET);
+  if (!dst || dst.getLastRow() < 2) { bqKitchenNote_(ss, 'Сначала соберите лист «' + BQ_DST_SHEET + '».'); return; }
+
+  var vals = dst.getDataRange().getValues();
+  var head = vals[0];
+  var at = {};
+  head.forEach(function (h, i) { at[h] = i; });
+
+  var list = [], statusOf = {};
+  for (var r = 1; r < vals.length; r++) {
+    var row = vals[r], key = row[at['Ключ']];
+    if (!key) continue;
+    var rec = bqParseRow_(bqSyntheticRow_(row, at), bqSyntheticIdx_());
+    if (!rec) continue;
+    rec.isTest = row[at['Тест']] === 'тест';
+    list.push(rec);
+    statusOf[rec.key] = row[at['Статус']];
+  }
+  bqWriteKitchen_(ss, list, statusOf);
+}
+
+/* лист «Банкеты» хранит исходную ссылку — по ней состав восстанавливается точно
+   так же, как при первом разборе, без повторного чтения журнала */
+function bqSyntheticRow_(row, at) {
+  return ['', '', '', '', '', '', '', row[at['Ссылка']], '', ''];
+}
+function bqSyntheticIdx_() {
+  return { 'Дата создания': 0, 'Менеджер': 1, 'Гость': 2, 'Дата банкета': 3, 'Зал': 4,
+           'Количество гостей': 5, 'Сумма': 6, 'Ссылка': 7, 'Повод': 8, 'Комментарий менеджера': 9 };
 }
 
 /** Пересобирает лист «Банкеты». Безопасно запускать сколько угодно раз. */
@@ -146,9 +199,9 @@ function bqRebuild() {
   var out = list.map(function (x, i) { return bqToRow_(x, i + 1, manual[x.key] || {}); });
   bqWriteSheet_(ss, out);
 
-  var statusOf = {};
-  out.forEach(function (r) { statusOf[r[BQ_COLS.indexOf('Ключ')]] = r[BQ_COLS.indexOf('Статус')]; });
-  bqWriteKitchen_(ss, list, statusOf);
+  // кухонный лист собирается отдельно: он ходит в интернет за меню, и если сайт
+  // отвечает медленно, лист «Банкеты» из-за этого страдать не должен
+
 }
 
 /* ------------------------------------------------------------------ разбор */
@@ -371,7 +424,6 @@ function bqWriteSheet_(ss, rows) {
 
   sh.hideColumns(c('Ссылка'));
   sh.hideColumns(c('Ключ'));
-  sh.autoResizeColumns(1, BQ_COLS.length);
 }
 
 /** Подсветка: истекающее КП, отказы, тестовые строки. */
@@ -423,8 +475,8 @@ function bqDishCode_(name) {
  */
 function bqLoadMenu_() {
   var cache = CacheService.getScriptCache();
-  var hit = cache.get('menu_v1');
-  if (hit) { try { return JSON.parse(hit); } catch (e) {} }
+  var hit = cache.get('bq_menu_v2');
+  if (hit) { try { return bqExpandMenu_(JSON.parse(hit)); } catch (e) {} }
 
   var html = UrlFetchApp.fetch(BQ_SITE_URL, { muteHttpExceptions: true }).getContentText();
   var m = html.match(/const MENU\s*=\s*\{([\s\S]*?)\n\};/);
@@ -444,9 +496,28 @@ function bqLoadMenu_() {
     byIndex[cats.length] = list;
     cats.push(cat);
   }
-  var menu = { cats: cats, byCode: byCode, byIndex: byIndex };
-  try { cache.put('menu_v1', JSON.stringify(menu), 21600); } catch (e) {}
-  return menu;
+  /* в кеш кладём плоский список: полная структура дублирует каждое блюдо дважды
+     и перестаёт влезать в лимит кеша — тогда меню тянулось бы с сайта заново
+     при каждом запуске */
+  var flat = { cats: cats, dishes: [] };
+  cats.forEach(function (cat, ci) {
+    byIndex[ci].forEach(function (d) { flat.dishes.push([d.name, d.price, d.unit, ci]); });
+  });
+  try { cache.put('bq_menu_v2', JSON.stringify(flat), 21600); } catch (e) {}
+  return { cats: cats, byCode: byCode, byIndex: byIndex };
+}
+
+/** Разворачивает плоский список из кеша обратно в рабочую структуру. */
+function bqExpandMenu_(flat) {
+  var byCode = {}, byIndex = {};
+  flat.cats.forEach(function (c, i) { byIndex[i] = []; });
+  flat.dishes.forEach(function (d) {
+    var dish = { name: d[0], price: d[1], unit: d[2], cat: flat.cats[d[3]] };
+    byIndex[d[3]].push(dish);
+    var code = bqDishCode_(dish.name);
+    if (!byCode[code]) byCode[code] = dish;
+  });
+  return { cats: flat.cats, byCode: byCode, byIndex: byIndex };
 }
 
 /** Собирает лист «Состав заказа»: строка на блюдо, по датам банкетов. */
@@ -512,7 +583,6 @@ function bqWriteKitchen_(ss, list, statusOf) {
       .setBackground('#F7EDD8').setRanges([body]).build()
   ]);
   sh.hideColumns(BQ_KIT_COLS.indexOf('Ключ') + 1);
-  sh.autoResizeColumns(1, BQ_KIT_COLS.length);
 }
 
 function bqKitchenNote_(ss, text) {
