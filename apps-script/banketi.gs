@@ -98,7 +98,7 @@ function parseRow_(row, idx) {
   var prepay = num_(p.r);
 
   return {
-    key: makeKey_(phone, name, date, hall),
+    key: p.oid ? 'oid:' + p.oid : makeKey_(phone, name, date, hall),
     created: created || new Date(0),
     name: name,
     phone: phone,
@@ -120,7 +120,9 @@ function parseRow_(row, idx) {
   };
 }
 
-/** Ключ заявки: телефон важнее имени, дальше — дата и зал. */
+/** Запасной ключ для ссылок без oid: телефон важнее имени, дальше дата и зал.
+    Ссылки, выданные калькулятором с v68, несут собственный ключ заявки — он
+    точнее, потому что переживает смену телефона, даты или зала в смете. */
 function makeKey_(phone, name, date, hall) {
   var who = phone || (name ? name.toLowerCase() : '?');
   var d = date ? Utilities.formatDate(date, Session.getScriptTimeZone(), 'yyyy-MM-dd') : '?';
