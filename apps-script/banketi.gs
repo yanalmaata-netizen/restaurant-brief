@@ -1,36 +1,41 @@
 /**
+ * ДОБАВЛЯТЬ ОТДЕЛЬНЫМ ФАЙЛОМ. Ничего в проекте не стирать.
+ *
+ * Все имена в этом файле начинаются с bq / BQ_, поэтому они не могут
+ * пересечься с боевым скриптом приёма предзаказов, который лежит рядом.
+ *
  * DIO Grand Cafe — сборка листа «Банкеты» из журнала предзаказов.
  *
  * Ничего не ломает: лист «Лист1», куда пишет калькулятор, не трогается вообще.
  * Скрипт читает его, распаковывает ссылки и собирает рядом чистый лист «Банкеты»,
  * где одна заявка — одна строка.
  *
- * Установка: Расширения → Apps Script → вставить → Сохранить → запустить setup() один раз.
+ * Установка: Расширения → Apps Script → вставить → Сохранить → запустить bqSetup() один раз.
  */
 
-var SRC_SHEET = 'Лист1';        // журнал калькулятора, только чтение
-var DST_SHEET = 'Банкеты';      // рабочий лист, пересобирается
-var KIT_SHEET = 'Состав заказа'; // сводка блюд для кухни
-var SITE_URL  = 'https://dio-banket.pages.dev';
-var REBUILD_EVERY_MIN = 5;
+var BQ_SRC_SHEET = 'Лист1';        // журнал калькулятора, только чтение
+var BQ_DST_SHEET = 'Банкеты';      // рабочий лист, пересобирается
+var BQ_KIT_SHEET = 'Состав заказа'; // сводка блюд для кухни
+var BQ_SITE_URL  = 'https://dio-banket.pages.dev';
+var BQ_REBUILD_EVERY_MIN = 5;
 
-var HALLS = { herc: 'Геркулес', gorg: 'Горгона', dion: 'Дионис', fl1: 'Первый этаж' };
+var BQ_HALLS = { herc: 'Геркулес', gorg: 'Горгона', dion: 'Дионис', fl1: 'Первый этаж' };
 
-var STATUSES = ['Заявка', 'КП отправлено', 'Подтверждён', 'Проведён', 'Отказ'];
+var BQ_STATUSES = ['Заявка', 'КП отправлено', 'Подтверждён', 'Проведён', 'Отказ'];
 
-var COLS = ['№', 'Статус', 'Гость', 'Телефон', 'Дата', 'Время', 'Зал', 'Гостей',
+var BQ_COLS = ['№', 'Статус', 'Гость', 'Телефон', 'Дата', 'Время', 'Зал', 'Гостей',
             'Повод', 'Сумма', 'На гостя', 'Скидка %', 'Предоплата', 'Остаток',
             'Оплата', 'КП до', 'Менеджер', 'Тайминг подачи', 'Заметка',
             'Правок', 'Последняя правка', 'Тест', 'Ссылка', 'Ключ'];
 
 // колонки, которые заполняет человек и которые нельзя затирать при пересборке
-var MANUAL = ['Статус', 'Заметка'];
+var BQ_MANUAL = ['Статус', 'Заметка'];
 
 /** Меню в самой таблице — чтобы не искать функции в редакторе скриптов. */
-function onOpen() {
+function bqOnOpen() {
   SpreadsheetApp.getUi().createMenu('DIO')
-    .addItem('Собрать листы сейчас', 'rebuild')
-    .addItem('Проверить настройку', 'selfCheck')
+    .addItem('Собрать листы сейчас', 'bqRebuild')
+    .addItem('Проверить настройку', 'bqSelfCheck')
     .addToUi();
 }
 
@@ -38,28 +43,28 @@ function onOpen() {
  * Показывает, что именно получилось: сколько заявок, сколько дублей схлопнулось,
  * читается ли меню с сайта. Запускать можно сколько угодно раз.
  */
-function selfCheck() {
+function bqSelfCheck() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var out = [];
 
-  var src = ss.getSheetByName(SRC_SHEET);
+  var src = ss.getSheetByName(BQ_SRC_SHEET);
   if (!src) {
-    say_('Не найден лист «' + SRC_SHEET + '».\n\nПереименуйте его обратно или поправьте' +
-         ' строку SRC_SHEET в начале скрипта.');
+    bqSay_('Не найден лист «' + BQ_SRC_SHEET + '».\n\nПереименуйте его обратно или поправьте' +
+         ' строку BQ_SRC_SHEET в начале скрипта.');
     return;
   }
   var raw = Math.max(0, src.getLastRow() - 1);
   out.push('Строк в журнале: ' + raw);
 
-  rebuild();
+  bqRebuild();
 
-  var dst = ss.getSheetByName(DST_SHEET);
+  var dst = ss.getSheetByName(BQ_DST_SHEET);
   var kept = dst ? Math.max(0, dst.getLastRow() - 1) : 0;
   out.push('Заявок после схлопывания дублей: ' + kept);
   out.push('Лишних строк убрано: ' + Math.max(0, raw - kept));
 
   if (dst && kept) {
-    var head = dst.getRange(1, 1, 1, COLS.length).getValues()[0];
+    var head = dst.getRange(1, 1, 1, BQ_COLS.length).getValues()[0];
     var testAt = head.indexOf('Тест') + 1;
     var tests = dst.getRange(2, testAt, kept, 1).getValues()
       .filter(function (r) { return r[0] === 'тест'; }).length;
@@ -67,41 +72,44 @@ function selfCheck() {
   }
 
   try {
-    var menu = loadMenu_();
+    var menu = bqLoadMenu_();
     var n = 0;
     for (var k in menu.byCode) n++;
     out.push('Меню с сайта прочитано: ' + menu.cats.length + ' разделов, ' + n + ' блюд');
   } catch (e) {
     out.push('Меню с сайта НЕ прочиталось: ' + e.message);
-    out.push('Лист «' + KIT_SHEET + '» останется пустым.');
+    out.push('Лист «' + BQ_KIT_SHEET + '» останется пустым.');
   }
 
-  var kit = ss.getSheetByName(KIT_SHEET);
+  var kit = ss.getSheetByName(BQ_KIT_SHEET);
   out.push('Строк для кухни по предстоящим банкетам: ' + (kit ? Math.max(0, kit.getLastRow() - 1) : 0));
 
-  say_(out.join('\n'));
+  bqSay_(out.join('\n'));
 }
 
-function say_(text) {
+function bqSay_(text) {
   try { SpreadsheetApp.getUi().alert(text); }
   catch (e) { Logger.log(text); }   // запуск из редактора, без открытой таблицы
 }
 
 /** Разовая установка: собирает листы, вешает автообновление и меню. */
-function setup() {
-  rebuild();
+function bqSetup() {
+  bqRebuild();
   ScriptApp.getProjectTriggers().forEach(function (t) {
-    if (t.getHandlerFunction() === 'rebuild') ScriptApp.deleteTrigger(t);
+    var f = t.getHandlerFunction();
+    if (f === 'bqRebuild' || f === 'bqOnOpen') ScriptApp.deleteTrigger(t);
   });
-  ScriptApp.newTrigger('rebuild').timeBased().everyMinutes(REBUILD_EVERY_MIN).create();
-  selfCheck();
+  ScriptApp.newTrigger('bqRebuild').timeBased().everyMinutes(BQ_REBUILD_EVERY_MIN).create();
+  ScriptApp.newTrigger('bqOnOpen').forSpreadsheet(SpreadsheetApp.getActiveSpreadsheet())
+    .onOpen().create();
+  bqSelfCheck();
 }
 
 /** Пересобирает лист «Банкеты». Безопасно запускать сколько угодно раз. */
-function rebuild() {
+function bqRebuild() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var src = ss.getSheetByName(SRC_SHEET);
-  if (!src) throw new Error('Не найден лист «' + SRC_SHEET + '»');
+  var src = ss.getSheetByName(BQ_SRC_SHEET);
+  if (!src) throw new Error('Не найден лист «' + BQ_SRC_SHEET + '»');
 
   var rows = src.getDataRange().getValues();
   if (rows.length < 2) return;
@@ -110,12 +118,12 @@ function rebuild() {
   var idx = {};
   head.forEach(function (h, i) { if (h) idx[h] = i; });
 
-  var manual = readManual_(ss);
+  var manual = bqReadManual_(ss);
 
   // ключ -> запись; побеждает самая свежая правка
   var byKey = {};
   for (var r = 1; r < rows.length; r++) {
-    var rec = parseRow_(rows[r], idx);
+    var rec = bqParseRow_(rows[r], idx);
     if (!rec) continue;
     var prev = byKey[rec.key];
     if (!prev) {
@@ -135,38 +143,38 @@ function rebuild() {
     return ad - bd;
   });
 
-  var out = list.map(function (x, i) { return toRow_(x, i + 1, manual[x.key] || {}); });
-  writeSheet_(ss, out);
+  var out = list.map(function (x, i) { return bqToRow_(x, i + 1, manual[x.key] || {}); });
+  bqWriteSheet_(ss, out);
 
   var statusOf = {};
-  out.forEach(function (r) { statusOf[r[COLS.indexOf('Ключ')]] = r[COLS.indexOf('Статус')]; });
-  writeKitchen_(ss, list, statusOf);
+  out.forEach(function (r) { statusOf[r[BQ_COLS.indexOf('Ключ')]] = r[BQ_COLS.indexOf('Статус')]; });
+  bqWriteKitchen_(ss, list, statusOf);
 }
 
 /* ------------------------------------------------------------------ разбор */
 
-function parseRow_(row, idx) {
-  var link = pickLink_(row, idx);
-  var created = toDate_(row[idx['Дата создания']]);
-  var p = link ? decodeLink_(link) : null;
+function bqParseRow_(row, idx) {
+  var link = bqPickLink_(row, idx);
+  var created = bqToDate_(row[idx['Дата создания']]);
+  var p = link ? bqDecodeLink_(link) : null;
 
   // без ссылки строка бесполезна — в ней нет ни телефона, ни срока КП
   if (!p) return null;
 
-  var name = String(p.n || cell_(row, idx, 'Гость') || '').trim();
-  var phone = normPhone_(p.p || extractPhone_(cell_(row, idx, 'Гость')));
+  var name = String(p.n || bqCell_(row, idx, 'Гость') || '').trim();
+  var phone = bqNormPhone_(p.p || bqExtractPhone_(bqCell_(row, idx, 'Гость')));
 
   // имя в журнале часто слеплено с телефоном — отрезаем хвост
   name = name.replace(/[+\d][\d\s().-]{6,}$/, '').trim();
 
-  var date = p.d ? toDate_(p.d) : toDate_(cell_(row, idx, 'Дата банкета'));
-  var hall = HALLS[p.h] || String(cell_(row, idx, 'Зал') || '').split('·')[0].trim();
-  var guests = num_(p.g) || num_(cell_(row, idx, 'Количество гостей'));
-  var total = num_(cell_(row, idx, 'Сумма'));
-  var prepay = num_(p.r);
+  var date = p.d ? bqToDate_(p.d) : bqToDate_(bqCell_(row, idx, 'Дата банкета'));
+  var hall = BQ_HALLS[p.h] || String(bqCell_(row, idx, 'Зал') || '').split('·')[0].trim();
+  var guests = bqNum_(p.g) || bqNum_(bqCell_(row, idx, 'Количество гостей'));
+  var total = bqNum_(bqCell_(row, idx, 'Сумма'));
+  var prepay = bqNum_(p.r);
 
   return {
-    key: p.oid ? 'oid:' + p.oid : makeKey_(phone, name, date, hall),
+    key: p.oid ? 'oid:' + p.oid : bqMakeKey_(phone, name, date, hall),
     created: created || new Date(0),
     name: name,
     phone: phone,
@@ -174,17 +182,17 @@ function parseRow_(row, idx) {
     time: String(p.et || '').trim(),
     hall: hall,
     guests: guests,
-    occasion: String(p.e || cell_(row, idx, 'Повод') || '').trim(),
+    occasion: String(p.e || bqCell_(row, idx, 'Повод') || '').trim(),
     total: total,
-    discount: num_(p.dc),
+    discount: bqNum_(p.dc),
     prepay: prepay,
     pay: String(p.pm || '').trim(),
-    validUntil: p.vu ? toDate_(p.vu) : null,
-    manager: String(p.mg || cell_(row, idx, 'Менеджер') || '').trim(),
-    timing: String(p.bn || cell_(row, idx, 'Комментарий менеджера') || '').replace(/\\n/g, '\n').trim(),
+    validUntil: p.vu ? bqToDate_(p.vu) : null,
+    manager: String(p.mg || bqCell_(row, idx, 'Менеджер') || '').trim(),
+    timing: String(p.bn || bqCell_(row, idx, 'Комментарий менеджера') || '').replace(/\\n/g, '\n').trim(),
     items: p.i || [],
     ver: +p.v || 1,
-    isTest: looksLikeTest_(phone, name),
+    isTest: bqLooksLikeTest_(phone, name),
     link: link,
     edits: 1
   };
@@ -193,13 +201,13 @@ function parseRow_(row, idx) {
 /** Запасной ключ для ссылок без oid: телефон важнее имени, дальше дата и зал.
     Ссылки, выданные калькулятором с v68, несут собственный ключ заявки — он
     точнее, потому что переживает смену телефона, даты или зала в смете. */
-function makeKey_(phone, name, date, hall) {
+function bqMakeKey_(phone, name, date, hall) {
   var who = phone || (name ? name.toLowerCase() : '?');
   var d = date ? Utilities.formatDate(date, Session.getScriptTimeZone(), 'yyyy-MM-dd') : '?';
   return who + '|' + d + '|' + (hall || '?');
 }
 
-function pickLink_(row, idx) {
+function bqPickLink_(row, idx) {
   if (idx['Ссылка'] != null) {
     var v = String(row[idx['Ссылка']] || '');
     if (v.indexOf('#') > -1) return v;
@@ -211,7 +219,7 @@ function pickLink_(row, idx) {
   return '';
 }
 
-function decodeLink_(link) {
+function bqDecodeLink_(link) {
   var m = String(link).match(/#[om]=([A-Za-z0-9+/=_-]+)/);
   if (!m) return null;
   var b64 = m[1].replace(/-/g, '+').replace(/_/g, '/');
@@ -226,7 +234,7 @@ function decodeLink_(link) {
 
 /* -------------------------------------------------------------- нормализация */
 
-function normPhone_(raw) {
+function bqNormPhone_(raw) {
   var d = String(raw == null ? '' : raw).replace(/\D/g, '');
   if (!d) return '';
   if (d.length === 11 && (d[0] === '8' || d[0] === '7')) d = '7' + d.slice(1);
@@ -235,13 +243,13 @@ function normPhone_(raw) {
   return '+' + d[0] + ' ' + d.slice(1, 4) + ' ' + d.slice(4, 7) + ' ' + d.slice(7, 9) + ' ' + d.slice(9);
 }
 
-function extractPhone_(s) {
+function bqExtractPhone_(s) {
   var m = String(s == null ? '' : s).match(/[+\d][\d\s().-]{6,}/);
   return m ? m[0] : '';
 }
 
 /** Обкатка и тестовые заявки: повторяющиеся цифры или номер не той длины. */
-function looksLikeTest_(phone, name) {
+function bqLooksLikeTest_(phone, name) {
   var digits = String(phone).replace(/\D/g, '');
   if (digits) {
     // у живого номера цифры разнообразные; 5555555555 и 8800000000 — нет
@@ -257,7 +265,7 @@ function looksLikeTest_(phone, name) {
   return false;
 }
 
-function num_(v) {
+function bqNum_(v) {
   if (v == null || v === '') return 0;
   if (typeof v === 'number') return v;
   var s = String(v).replace(/[\s  ]/g, '').replace(',', '.').replace(/[^\d.-]/g, '');
@@ -265,7 +273,7 @@ function num_(v) {
   return isNaN(n) ? 0 : n;
 }
 
-function toDate_(v) {
+function bqToDate_(v) {
   if (!v) return null;
   if (v instanceof Date) return v;
   var s = String(v).trim();
@@ -277,13 +285,13 @@ function toDate_(v) {
   return isNaN(d.getTime()) ? null : d;
 }
 
-function cell_(row, idx, name) {
+function bqCell_(row, idx, name) {
   return idx[name] == null ? '' : row[idx[name]];
 }
 
 /* ------------------------------------------------------------------ запись */
 
-function toRow_(x, no, keep) {
+function bqToRow_(x, no, keep) {
   var perGuest = x.guests ? Math.round(x.total / x.guests) : '';
   var left = x.total - x.prepay;
   return [
@@ -315,8 +323,8 @@ function toRow_(x, no, keep) {
 }
 
 /** Сохраняем то, что менеджеры вписали руками, чтобы пересборка это не стёрла. */
-function readManual_(ss) {
-  var sh = ss.getSheetByName(DST_SHEET);
+function bqReadManual_(ss) {
+  var sh = ss.getSheetByName(BQ_DST_SHEET);
   var out = {};
   if (!sh || sh.getLastRow() < 2) return out;
   var vals = sh.getDataRange().getValues();
@@ -327,7 +335,7 @@ function readManual_(ss) {
     var key = vals[r][kAt];
     if (!key) continue;
     var keep = {};
-    MANUAL.forEach(function (name) {
+    BQ_MANUAL.forEach(function (name) {
       var at = head.indexOf(name);
       if (at > -1 && vals[r][at] !== '') keep[name] = vals[r][at];
     });
@@ -336,18 +344,18 @@ function readManual_(ss) {
   return out;
 }
 
-function writeSheet_(ss, rows) {
-  var sh = ss.getSheetByName(DST_SHEET) || ss.insertSheet(DST_SHEET);
+function bqWriteSheet_(ss, rows) {
+  var sh = ss.getSheetByName(BQ_DST_SHEET) || ss.insertSheet(BQ_DST_SHEET);
   sh.clear();
 
-  sh.getRange(1, 1, 1, COLS.length).setValues([COLS])
+  sh.getRange(1, 1, 1, BQ_COLS.length).setValues([BQ_COLS])
     .setFontWeight('bold').setBackground('#F1ECE1');
   sh.setFrozenRows(1);
 
   if (!rows.length) return;
-  sh.getRange(2, 1, rows.length, COLS.length).setValues(rows);
+  sh.getRange(2, 1, rows.length, BQ_COLS.length).setValues(rows);
 
-  var c = function (name) { return COLS.indexOf(name) + 1; };
+  var c = function (name) { return BQ_COLS.indexOf(name) + 1; };
 
   sh.getRange(2, c('Дата'), rows.length, 1).setNumberFormat('dd.MM.yyyy');
   sh.getRange(2, c('КП до'), rows.length, 1).setNumberFormat('dd.MM.yyyy');
@@ -357,19 +365,19 @@ function writeSheet_(ss, rows) {
   });
 
   sh.getRange(2, c('Статус'), rows.length, 1).setDataValidation(
-    SpreadsheetApp.newDataValidation().requireValueInList(STATUSES, true).build());
+    SpreadsheetApp.newDataValidation().requireValueInList(BQ_STATUSES, true).build());
 
-  paint_(sh, rows.length, c);
+  bqPaint_(sh, rows.length, c);
 
   sh.hideColumns(c('Ссылка'));
   sh.hideColumns(c('Ключ'));
-  sh.autoResizeColumns(1, COLS.length);
+  sh.autoResizeColumns(1, BQ_COLS.length);
 }
 
 /** Подсветка: истекающее КП, отказы, тестовые строки. */
-function paint_(sh, n, c) {
-  var body = sh.getRange(2, 1, n, COLS.length);
-  var a1 = function (name) { return '$' + colLetter_(c(name)) + '2'; };
+function bqPaint_(sh, n, c) {
+  var body = sh.getRange(2, 1, n, BQ_COLS.length);
+  var a1 = function (name) { return '$' + bqColLetter_(c(name)) + '2'; };
 
   var rules = [
     SpreadsheetApp.newConditionalFormatRule().whenFormulaSatisfied(
@@ -385,7 +393,7 @@ function paint_(sh, n, c) {
   sh.setConditionalFormatRules(rules);
 }
 
-function colLetter_(n) {
+function bqColLetter_(n) {
   var s = '';
   while (n > 0) { var m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = (n - m - 1) / 26; }
   return s;
@@ -393,11 +401,11 @@ function colLetter_(n) {
 
 /* ══════════════════════════ лист для кухни ══════════════════════════ */
 
-var KIT_COLS = ['Дата', 'Время', 'Зал', 'Гость', 'Гостей', 'Раздел', 'Блюдо',
+var BQ_KIT_COLS = ['Дата', 'Время', 'Зал', 'Гость', 'Гостей', 'Раздел', 'Блюдо',
                 'Кол-во', 'Ед.', 'Примечание', 'Точность', 'Ключ'];
 
 /** Тот же код блюда, что считает калькулятор (v67+). Совпадать обязан посимвольно. */
-function dishCode_(name) {
+function bqDishCode_(name) {
   var h = 0x811c9dc5;
   var t = String(name).toLowerCase().replace(/\s+/g, ' ').trim();
   for (var i = 0; i < t.length; i++) {
@@ -413,14 +421,14 @@ function dishCode_(name) {
  * сверяется с тем меню, которое реально стоит в калькуляторе, и его не надо
  * править руками после каждого изменения блюд.
  */
-function loadMenu_() {
+function bqLoadMenu_() {
   var cache = CacheService.getScriptCache();
   var hit = cache.get('menu_v1');
   if (hit) { try { return JSON.parse(hit); } catch (e) {} }
 
-  var html = UrlFetchApp.fetch(SITE_URL, { muteHttpExceptions: true }).getContentText();
+  var html = UrlFetchApp.fetch(BQ_SITE_URL, { muteHttpExceptions: true }).getContentText();
   var m = html.match(/const MENU\s*=\s*\{([\s\S]*?)\n\};/);
-  if (!m) throw new Error('Не удалось прочитать меню с ' + SITE_URL);
+  if (!m) throw new Error('Не удалось прочитать меню с ' + BQ_SITE_URL);
 
   var cats = [], byCode = {}, byIndex = {};
   var catRe = /\n {2}'([^']+)'\s*:\s*\[([\s\S]*?)\n {2}\]/g, cm;
@@ -430,7 +438,7 @@ function loadMenu_() {
     while ((dm = dishRe.exec(cm[2])) !== null) {
       var dish = { name: dm[1].replace(/\\'/g, "'"), price: +dm[2], unit: dm[3], cat: cat };
       list.push(dish);
-      var code = dishCode_(dish.name);
+      var code = bqDishCode_(dish.name);
       if (!byCode[code]) byCode[code] = dish;
     }
     byIndex[cats.length] = list;
@@ -442,10 +450,10 @@ function loadMenu_() {
 }
 
 /** Собирает лист «Состав заказа»: строка на блюдо, по датам банкетов. */
-function writeKitchen_(ss, list, statusOf) {
+function bqWriteKitchen_(ss, list, statusOf) {
   var menu;
-  try { menu = loadMenu_(); }
-  catch (e) { kitchenNote_(ss, 'Меню не загрузилось: ' + e.message); return; }
+  try { menu = bqLoadMenu_(); }
+  catch (e) { bqKitchenNote_(ss, 'Меню не загрузилось: ' + e.message); return; }
 
   var today = new Date(); today.setHours(0, 0, 0, 0);
   var rows = [];
@@ -486,29 +494,29 @@ function writeKitchen_(ss, list, statusOf) {
     return String(a[6]) < String(b[6]) ? -1 : 1;
   });
 
-  var sh = ss.getSheetByName(KIT_SHEET) || ss.insertSheet(KIT_SHEET);
+  var sh = ss.getSheetByName(BQ_KIT_SHEET) || ss.insertSheet(BQ_KIT_SHEET);
   sh.clear();
-  sh.getRange(1, 1, 1, KIT_COLS.length).setValues([KIT_COLS])
+  sh.getRange(1, 1, 1, BQ_KIT_COLS.length).setValues([BQ_KIT_COLS])
     .setFontWeight('bold').setBackground('#F1ECE1');
   sh.setFrozenRows(1);
-  if (!rows.length) { kitchenNote_(ss, 'Предстоящих банкетов нет.'); return; }
+  if (!rows.length) { bqKitchenNote_(ss, 'Предстоящих банкетов нет.'); return; }
 
-  sh.getRange(2, 1, rows.length, KIT_COLS.length).setValues(rows);
+  sh.getRange(2, 1, rows.length, BQ_KIT_COLS.length).setValues(rows);
   sh.getRange(2, 1, rows.length, 1).setNumberFormat('dd.MM.yyyy');
 
-  var c = KIT_COLS.indexOf('Точность') + 1;
-  var body = sh.getRange(2, 1, rows.length, KIT_COLS.length);
+  var c = BQ_KIT_COLS.indexOf('Точность') + 1;
+  var body = sh.getRange(2, 1, rows.length, BQ_KIT_COLS.length);
   sh.setConditionalFormatRules([
     SpreadsheetApp.newConditionalFormatRule()
-      .whenFormulaSatisfied('=$' + colLetter_(c) + '2<>""')
+      .whenFormulaSatisfied('=$' + bqColLetter_(c) + '2<>""')
       .setBackground('#F7EDD8').setRanges([body]).build()
   ]);
-  sh.hideColumns(KIT_COLS.indexOf('Ключ') + 1);
-  sh.autoResizeColumns(1, KIT_COLS.length);
+  sh.hideColumns(BQ_KIT_COLS.indexOf('Ключ') + 1);
+  sh.autoResizeColumns(1, BQ_KIT_COLS.length);
 }
 
-function kitchenNote_(ss, text) {
-  var sh = ss.getSheetByName(KIT_SHEET) || ss.insertSheet(KIT_SHEET);
+function bqKitchenNote_(ss, text) {
+  var sh = ss.getSheetByName(BQ_KIT_SHEET) || ss.insertSheet(BQ_KIT_SHEET);
   sh.clear();
   sh.getRange(1, 1).setValue(text).setFontColor('#9A9284');
 }
