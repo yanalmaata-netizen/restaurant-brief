@@ -10,6 +10,8 @@
 
 var SRC_SHEET = 'Лист1';        // журнал калькулятора, только чтение
 var DST_SHEET = 'Банкеты';      // рабочий лист, пересобирается
+var KIT_SHEET = 'Состав заказа'; // сводка блюд для кухни
+var SITE_URL  = 'https://dio-banket.pages.dev';
 var REBUILD_EVERY_MIN = 5;
 
 var HALLS = { herc: 'Геркулес', gorg: 'Горгона', dion: 'Дионис', fl1: 'Первый этаж' };
@@ -73,6 +75,10 @@ function rebuild() {
 
   var out = list.map(function (x, i) { return toRow_(x, i + 1, manual[x.key] || {}); });
   writeSheet_(ss, out);
+
+  var statusOf = {};
+  out.forEach(function (r) { statusOf[r[COLS.indexOf('Ключ')]] = r[COLS.indexOf('Статус')]; });
+  writeKitchen_(ss, list, statusOf);
 }
 
 /* ------------------------------------------------------------------ разбор */
@@ -114,6 +120,8 @@ function parseRow_(row, idx) {
     validUntil: p.vu ? toDate_(p.vu) : null,
     manager: String(p.mg || cell_(row, idx, 'Менеджер') || '').trim(),
     timing: String(p.bn || cell_(row, idx, 'Комментарий менеджера') || '').replace(/\\n/g, '\n').trim(),
+    items: p.i || [],
+    ver: +p.v || 1,
     isTest: looksLikeTest_(phone, name),
     link: link,
     edits: 1
@@ -319,4 +327,126 @@ function colLetter_(n) {
   var s = '';
   while (n > 0) { var m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = (n - m - 1) / 26; }
   return s;
+}
+
+/* ══════════════════════════ лист для кухни ══════════════════════════ */
+
+var KIT_COLS = ['Дата', 'Время', 'Зал', 'Гость', 'Гостей', 'Раздел', 'Блюдо',
+                'Кол-во', 'Ед.', 'Примечание', 'Точность', 'Ключ'];
+
+/** Тот же код блюда, что считает калькулятор (v67+). Совпадать обязан посимвольно. */
+function dishCode_(name) {
+  var h = 0x811c9dc5;
+  var t = String(name).toLowerCase().replace(/\s+/g, ' ').trim();
+  for (var i = 0; i < t.length; i++) {
+    h ^= t.charCodeAt(i);
+    // Math.imul в Apps Script есть, но пишем через явное умножение для надёжности
+    h = ((h & 0xffff) * 0x01000193 + ((((h >>> 16) * 0x01000193) & 0xffff) << 16)) >>> 0;
+  }
+  return ('0000000' + h.toString(36)).slice(-5);
+}
+
+/**
+ * Меню тянем с самого сайта и кешируем на 6 часов: так лист для кухни всегда
+ * сверяется с тем меню, которое реально стоит в калькуляторе, и его не надо
+ * править руками после каждого изменения блюд.
+ */
+function loadMenu_() {
+  var cache = CacheService.getScriptCache();
+  var hit = cache.get('menu_v1');
+  if (hit) { try { return JSON.parse(hit); } catch (e) {} }
+
+  var html = UrlFetchApp.fetch(SITE_URL, { muteHttpExceptions: true }).getContentText();
+  var m = html.match(/const MENU\s*=\s*\{([\s\S]*?)\n\};/);
+  if (!m) throw new Error('Не удалось прочитать меню с ' + SITE_URL);
+
+  var cats = [], byCode = {}, byIndex = {};
+  var catRe = /\n {2}'([^']+)'\s*:\s*\[([\s\S]*?)\n {2}\]/g, cm;
+  while ((cm = catRe.exec(m[1])) !== null) {
+    var cat = cm[1], list = [];
+    var dishRe = /\[\s*'((?:[^'\\]|\\.)*)'\s*,\s*(\d+)\s*,\s*'([^']*)'/g, dm;
+    while ((dm = dishRe.exec(cm[2])) !== null) {
+      var dish = { name: dm[1].replace(/\\'/g, "'"), price: +dm[2], unit: dm[3], cat: cat };
+      list.push(dish);
+      var code = dishCode_(dish.name);
+      if (!byCode[code]) byCode[code] = dish;
+    }
+    byIndex[cats.length] = list;
+    cats.push(cat);
+  }
+  var menu = { cats: cats, byCode: byCode, byIndex: byIndex };
+  try { cache.put('menu_v1', JSON.stringify(menu), 21600); } catch (e) {}
+  return menu;
+}
+
+/** Собирает лист «Состав заказа»: строка на блюдо, по датам банкетов. */
+function writeKitchen_(ss, list, statusOf) {
+  var menu;
+  try { menu = loadMenu_(); }
+  catch (e) { kitchenNote_(ss, 'Меню не загрузилось: ' + e.message); return; }
+
+  var today = new Date(); today.setHours(0, 0, 0, 0);
+  var rows = [];
+
+  list.forEach(function (x) {
+    var status = statusOf[x.key] || '';
+    // кухне нужны предстоящие живые банкеты, не архив и не обкатка
+    if (x.isTest || status === 'Отказ') return;
+    if (!x.date || x.date < today) return;
+
+    x.items.forEach(function (it) {
+      var dish = null, exact = '';
+      if (x.ver >= 2) {
+        dish = menu.byCode[it[0]] || null;
+      } else {
+        // старый формат: позиции по номерам, а номера с тех пор могли съехать
+        var cat = menu.byIndex[it[0]];
+        dish = cat ? (cat[it[1]] || null) : null;
+        exact = 'сверить со сметой';
+      }
+      var qty  = x.ver >= 2 ? it[1] : it[2];
+      var note = (x.ver >= 2 ? it[2] : it[3]) || '';
+      if (!dish) {
+        rows.push([x.date, x.time, x.hall, x.name, x.guests, '—',
+                   'позиции нет в меню', qty, '', note, 'проверить', x.key]);
+        return;
+      }
+      rows.push([x.date, x.time, x.hall, x.name, x.guests, dish.cat,
+                 dish.name, qty, dish.unit, note, exact, x.key]);
+    });
+  });
+
+  rows.sort(function (a, b) {
+    var d = (a[0] ? a[0].getTime() : 0) - (b[0] ? b[0].getTime() : 0);
+    if (d) return d;
+    if (a[2] !== b[2]) return String(a[2]) < String(b[2]) ? -1 : 1;
+    if (a[5] !== b[5]) return String(a[5]) < String(b[5]) ? -1 : 1;
+    return String(a[6]) < String(b[6]) ? -1 : 1;
+  });
+
+  var sh = ss.getSheetByName(KIT_SHEET) || ss.insertSheet(KIT_SHEET);
+  sh.clear();
+  sh.getRange(1, 1, 1, KIT_COLS.length).setValues([KIT_COLS])
+    .setFontWeight('bold').setBackground('#F1ECE1');
+  sh.setFrozenRows(1);
+  if (!rows.length) { kitchenNote_(ss, 'Предстоящих банкетов нет.'); return; }
+
+  sh.getRange(2, 1, rows.length, KIT_COLS.length).setValues(rows);
+  sh.getRange(2, 1, rows.length, 1).setNumberFormat('dd.MM.yyyy');
+
+  var c = KIT_COLS.indexOf('Точность') + 1;
+  var body = sh.getRange(2, 1, rows.length, KIT_COLS.length);
+  sh.setConditionalFormatRules([
+    SpreadsheetApp.newConditionalFormatRule()
+      .whenFormulaSatisfied('=$' + colLetter_(c) + '2<>""')
+      .setBackground('#F7EDD8').setRanges([body]).build()
+  ]);
+  sh.hideColumns(KIT_COLS.indexOf('Ключ') + 1);
+  sh.autoResizeColumns(1, KIT_COLS.length);
+}
+
+function kitchenNote_(ss, text) {
+  var sh = ss.getSheetByName(KIT_SHEET) || ss.insertSheet(KIT_SHEET);
+  sh.clear();
+  sh.getRange(1, 1).setValue(text).setFontColor('#9A9284');
 }
