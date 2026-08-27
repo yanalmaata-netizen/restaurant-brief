@@ -1,0 +1,5 @@
+/api/*
+  Cache-Control: no-store
+
+/smena/*
+  Cache-Control: no-store
