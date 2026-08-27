@@ -202,7 +202,7 @@ table.t td.bad{color:var(--red)}
     <div class="cloud" id="cloud"><b>—</b>локально</div>
   </div>
   <h1>Передача <em>смены</em></h1>
-  <div class="sub" id="place">Ресторан · <span id="ver">v2.0</span></div>
+  <div class="sub" id="place">Ресторан · <span id="ver">v3.0</span></div>
   <div class="tabs">
     <button class="tab on" data-v="home">Сейчас</button>
     <button class="tab" data-v="tasks">Задачи</button>
@@ -219,7 +219,7 @@ table.t td.bad{color:var(--red)}
    Хранение: KV на сервере (побеждает) → localStorage → пусто.
    Правка схемы блоков — только в BLOCKS ниже.
    ============================================================ */
-var VER='2.0', LSKEY='guestup_smena_v1', MEKEY='guestup_smena_me', API='/api/smena';
+var VER='3.0', LSKEY='guestup_smena_v1', MEKEY='guestup_smena_me', API='/api/smena';
 
 /* ---------- СХЕМА БЛОКОВ ПЕРЕДАЧИ ---------- */
 var BLOCKS=[
@@ -228,47 +228,70 @@ var BLOCKS=[
  fields:[{k:'done',ty:'chk',l:'Брифинг проведён'},
          {k:'time',ty:'txt',l:'Во сколько и сколько длился'},
          {k:'who',ty:'txt',l:'Кто был, кого не было'},
-         {k:'stopsaid',ty:'chk',l:'Стоп-лист озвучен команде'},
-         {k:'banqsaid',ty:'chk',l:'Банкеты и брони на сегодня озвучены'},
+         {k:'menusaid',ty:'chk',l:'Изменения в меню и сете озвучены'},
+         {k:'stopsaid',ty:'chk',l:'Стоп-лист озвучен'},
+         {k:'winesaid',ty:'chk',l:'Вино по бокалам и винные акценты озвучены'},
+         {k:'allergysaid',ty:'chk',l:'Аллергии и диеты по сегодняшним броням озвучены'},
+         {k:'banqsaid',ty:'chk',l:'План вечера по столам и банкетам разобран'},
          {k:'focus',ty:'area',l:'Акцент дня: что продаём, на что смотрим'},
          {k:'text',ty:'area',l:'О чём говорили, что спрашивали'}]},
+
+{id:'hall',ic:'✨',ph:1,t:'Готовность зала',
+ hint:'Проход по залу до первого гостя. В fine dining это не формальность: гость видит стол раньше, чем меню.',
+ fields:[{k:'tables',ty:'chk',l:'Сервировка выставлена по стандарту'},
+         {k:'polish',ty:'chk',l:'Приборы и бокалы отполированы'},
+         {k:'linen',ty:'chk',l:'Скатерти и салфетки свежие, без пятен'},
+         {k:'light',ty:'chk',l:'Свет выставлен, свечи готовы'},
+         {k:'music',ty:'chk',l:'Музыка включена, громкость проверена'},
+         {k:'temp',ty:'chk',l:'Температура в зале комфортная'},
+         {k:'flowers',ty:'chk',l:'Цветы и декор свежие'},
+         {k:'menus',ty:'chk',l:'Меню и винная карта чистые, без правок от руки'},
+         {k:'wc',ty:'chk',l:'Туалеты проверены и укомплектованы'},
+         {k:'plan',ty:'chk',l:'План посадки на вечер распечатан и разобран'},
+         {k:'note',ty:'area',l:'Что не готово и почему'}]},
 
 {id:'log',ic:'📝',ty:'log',t:'Журнал смены',
  hint:'Записывайте по ходу смены, а не в конце. Каждая запись со временем — потом видно, когда что случилось.'},
 
-{id:'summary',ic:'📊',t:'Итоги смены',
- fields:[{k:'checks',ty:'num',l:'Чеков'},
-         {k:'guests',ty:'num',l:'Гостей'},
-         {k:'peak',ty:'txt',l:'Пик посадки'},
-         {k:'note',ty:'area',l:'Как прошла смена'}]},
-
-{id:'guestcase',ic:'🙋',ph:1,t:'Гости, жалобы, обещания',
- hint:'Обещание гостю — то, что теряется на пересменке чаще всего. Пишите так, чтобы принимающий смог его выполнить без вас.',
- item:[{k:'kind',ty:'sel',l:'Что',o:['Обещание гостю','Жалоба','Комплимент','Особый контроль','Забытая вещь']},
+{id:'guestcase',ic:'🙋',ph:1,t:'Гости вечера',
+ hint:'Обещание гостю и аллергия — две вещи, которые нельзя потерять на пересменке. Пишите так, чтобы принимающий закрыл вопрос без вас.',
+ item:[{k:'kind',ty:'sel',l:'Что',o:['Обещание гостю','Аллергия / диета','VIP или постоянный гость','Повод: годовщина, ДР','Жалоба','Комплимент','Забытая вещь']},
        {k:'who',ty:'txt',l:'Гость / стол / телефон'},
-       {k:'what',ty:'area',l:'Суть и что именно обещано'},
+       {k:'what',ty:'area',l:'Суть, предпочтения, что именно обещано'},
        {k:'owner',ty:'txt',l:'Кто закрывает'},
        {k:'status',ty:'sel',l:'Статус',o:['Открыто','Закрыто']}]},
 
-{id:'banquets',ic:'🥂',t:'Банкеты и брони',
- confirm:'Банкеты и брони на завтра проверены: предоплаты, меню, тайминг',
+{id:'banquets',ic:'🥂',t:'Резервы и банкеты',
+ confirm:'Резервы и банкеты на завтра проверены: предоплаты, меню, аллергии, тайминг',
  hint:'Заносите всё на 7 дней вперёд, а не только на сегодня.',
+ fields:[{k:'noshow',ty:'num',l:'Не пришли без предупреждения (no-show)'},
+         {k:'cancel',ty:'num',l:'Отмены в день брони'}],
  item:[{k:'date',ty:'date',l:'Дата'},{k:'name',ty:'txt',l:'Гость / повод'},
-       {k:'pax',ty:'num',l:'Гостей'},{k:'hall',ty:'txt',l:'Зал'},
+       {k:'pax',ty:'num',l:'Гостей'},{k:'hall',ty:'txt',l:'Зал / стол'},
        {k:'dep',ty:'sel',l:'Предоплата',o:['Нет','Частичная','Полная']},
        {k:'menu',ty:'sel',l:'Меню',o:['Не согласовано','Согласовано','Подписано']},
-       {k:'time',ty:'txt',l:'Тайминг'},
-       {k:'special',ty:'area',l:'Спецпожелания, аллергии, декор, техника'},
+       {k:'allergy',ty:'txt',l:'Аллергии и диеты'},
+       {k:'time',ty:'txt',l:'Тайминг подачи'},
+       {k:'special',ty:'area',l:'Спецпожелания, декор, техника, музыка'},
        {k:'owner',ty:'txt',l:'Ответственный'},
        {k:'ready',ty:'area',l:'Что уже готово / что осталось'}]},
 
-{id:'kitchen',ic:'🍳',ph:1,t:'Кухня и бар',
+{id:'kitchen',ic:'🍳',ph:1,t:'Кухня',
  confirm:'Стоп-лист передан и актуален на момент передачи',
  fields:[{k:'stop',ty:'area',l:'Стоп-лист (что закончилось)'},
-         {k:'preps',ty:'area',l:'Заготовки: что сделано, что нужно на завтра'},
+         {k:'setmenu',ty:'area',l:'Изменения в сете и дегустационном меню'},
+         {k:'preps',ty:'area',l:'Mise en place: что сделано, что нужно на завтра'},
          {k:'writeoff',ty:'area',l:'Списания и брак'},
-         {k:'quality',ty:'area',l:'Замечания по качеству и скорости отдачи'},
+         {k:'quality',ty:'area',l:'Качество и время отдачи по курсам'},
          {k:'temps',ty:'chk',l:'Температурные листы заполнены, холодильники в норме'}]},
+
+{id:'wine',ic:'🍷',ph:1,t:'Бар и вино',
+ hint:'Открытая бутылка по бокалам — деньги, которые испаряются за сутки. Передавайте её так же строго, как кассу.',
+ fields:[{k:'stop',ty:'area',l:'Стоп-лист по вину и барной карте'},
+         {k:'glass',ty:'area',l:'Открытые бутылки по бокалам: что осталось и до какого дня'},
+         {k:'decant',ty:'area',l:'Что декантировать или подготовить к завтрашним броням'},
+         {k:'fridge',ty:'chk',l:'Температура винного шкафа в норме'},
+         {k:'writeoff',ty:'area',l:'Списания и бой по бару'}]},
 
 {id:'purchase',ic:'📦',t:'Закупка и склад',
  hint:'«Я думал, ты заказал» — вторая по частоте потеря на пересменке.',
@@ -284,7 +307,8 @@ var BLOCKS=[
        {k:'deadline',ty:'txt',l:'Срок'}]},
 
 {id:'staff',ic:'👥',t:'Персонал',
- fields:[{k:'tomorrow',ty:'area',l:'Расстановка на следующую смену'}],
+ fields:[{k:'stations',ty:'area',l:'Расстановка по секциям на следующую смену'},
+         {k:'tomorrow',ty:'area',l:'Кого не хватает и что с этим делать'}],
  item:[{k:'who',ty:'txt',l:'Кто'},
        {k:'what',ty:'sel',l:'Что',o:['Не вышел','Опоздал','Стажёр','Замена','Конфликт','Отпросился']},
        {k:'note',ty:'area',l:'Подробности'}]},
@@ -297,11 +321,17 @@ var BLOCKS=[
          {k:'diff',ty:'area',l:'Расхождения и чем объясняются'},
          {k:'voids',ty:'area',l:'Отменённые чеки, скидки, комплименты — с обоснованием'}]},
 
+{id:'summary',ic:'📊',t:'Итоги смены',
+ fields:[{k:'guests',ty:'num',l:'Гостей'},
+         {k:'checks',ty:'num',l:'Чеков'},
+         {k:'peak',ty:'txt',l:'Пик посадки'},
+         {k:'note',ty:'area',l:'Как прошла смена'}]},
+
 {id:'closing',ic:'🔒',ph:1,t:'Закрытие и безопасность',
  fields:[{k:'gas',ty:'chk',l:'Газ и плита выключены'},
          {k:'light',ty:'chk',l:'Свет и техника обесточены'},
          {k:'water',ty:'chk',l:'Вода перекрыта'},
-         {k:'fridge',ty:'chk',l:'Холодильники закрыты и работают'},
+         {k:'fridge',ty:'chk',l:'Холодильники и винный шкаф закрыты и работают'},
          {k:'win',ty:'chk',l:'Окна и чёрный вход закрыты'},
          {k:'alarm',ty:'chk',l:'Сигнализация поставлена'},
          {k:'keys',ty:'txt',l:'Ключи у кого'},
@@ -671,6 +701,13 @@ function viewTasks(){
 /* ---------- KPI И ВЫГРУЗКА ---------- */
 /* Считаем то же, что меряют Jolt, Zenput и Trail: процент выполнения,
    скорость закрытия и что осталось незакрытым. */
+function pctChk(s,bid){
+  var b=blk(bid);if(!b)return 0;
+  var f=(b.fields||[]).filter(function(x){return x.ty==='chk'});
+  var d=s.data[bid]||{}, y=0;
+  f.forEach(function(x){if(d[x.k])y++});
+  return f.length?Math.round(y/f.length*100):0;
+}
 function shiftKPI(s){
   var k={date:s.date,part:partName(s.part),from:s.from||'',to:s.acceptedBy||s.to||''};
   k.status=s.status==='accepted'?'принята':(s.status==='sent'?'ждёт приёма':'черновик');
@@ -679,15 +716,17 @@ function shiftKPI(s){
   k.min=(s.sentAt&&s.acceptedAt)?Math.max(0,Math.round((s.acceptedAt-s.sentAt)/60000)):'';
   var f=0;BLOCKS.forEach(function(b){if(filled(s,b))f++});
   k.blocks=f;k.blocksPct=Math.round(f/BLOCKS.length*100);
-  var cb=blk('closing'), cf=(cb.fields||[]).filter(function(x){return x.ty==='chk'});
-  var cd=s.data.closing||{}, cy=0;
-  cf.forEach(function(x){if(cd[x.k])cy++});
-  k.closePct=cf.length?Math.round(cy/cf.length*100):0;
+  k.closePct=pctChk(s,'closing');
+  k.hallPct=pctChk(s,'hall');
   k.brief=(s.data.brief||{}).done?'да':'нет';
+  k.guests=(s.data.summary||{}).guests||'';
   var g=((s.data.guestcase||{}).__list)||[];
   k.complaints=g.filter(function(x){return x.kind==='Жалоба'}).length;
-  k.promises=g.filter(function(x){return x.kind==='Обещание гостю'}).length;
-  var bq=((s.data.banquets||{}).__list)||[];
+  k.promisesOpen=g.filter(function(x){return x.kind==='Обещание гостю'&&x.status!=='Закрыто'}).length;
+  var bd=s.data.banquets||{}, bq=bd.__list||[];
+  k.noshow=+(bd.noshow||0); k.cancel=+(bd.cancel||0);
+  k.allergy=g.filter(function(x){return x.kind==='Аллергия / диета'}).length+
+            bq.filter(function(x){return String(x.allergy||'').trim()}).length;
   k.banqRisk=bq.filter(function(x){return x.dep==='Нет'||x.menu==='Не согласовано'}).length;
   k.log=(((s.data.log||{}).__log)||[]).length;
   k.created=S.tasks.filter(function(t){return t.from===s.id}).length;
@@ -695,10 +734,11 @@ function shiftKPI(s){
   return k;
 }
 var COLS=[['Дата','date'],['Смена','part'],['Сдал','from'],['Принял','to'],['Статус','status'],
-  ['Передана','sent'],['Принята','acc'],['Минут до приёма','min'],['Блоков заполнено','blocks'],
-  ['Полнота, %','blocksPct'],['Чек-лист закрытия, %','closePct'],['Брифинг','brief'],
-  ['Записей в журнале','log'],['Задач создано','created'],['Задач закрыто','closed'],
-  ['Жалоб','complaints'],['Обещаний гостям','promises'],['Банкетов на контроле','banqRisk']];
+  ['Минут до приёма','min'],['Полнота передачи, %','blocksPct'],['Готовность зала, %','hallPct'],
+  ['Чек-лист закрытия, %','closePct'],['Брифинг','brief'],['Записей в журнале','log'],
+  ['Гостей','guests'],['No-show','noshow'],['Отмен','cancel'],
+  ['Жалоб','complaints'],['Обещаний открыто','promisesOpen'],['Аллергий отмечено','allergy'],
+  ['Банкетов на контроле','banqRisk'],['Задач поставлено','created'],['Задач закрыто','closed']];
 function tableRows(list){
   var rows=[COLS.map(function(c){return c[0]})];
   list.forEach(function(s){var k=shiftKPI(s);rows.push(COLS.map(function(c){var v=k[c[1]];return v==null?'':String(v)}))});
@@ -757,30 +797,40 @@ function viewRep(){
       return '<button class="'+(period===x[0]?'on':'')+'" data-a="per:'+x[0]+'">'+x[1]+'</button>'}).join('')+
     '</div>';
 
-  h+='<div class="card"><div class="card-h">Как идёт передача</div>'+
-     '<div class="card-s">Считается по принятым сменам за период.</div><div class="kpi">'+
-    k(acc.length,'смен принято')+
-    k(avg(K.map(function(x){return x.blocksPct}))+'%','полнота передачи',avg(K.map(function(x){return x.blocksPct}))>=80?'good':'bad')+
-    k(avg(K.map(function(x){return x.closePct}))+'%','чек-лист закрытия',avg(K.map(function(x){return x.closePct}))>=90?'good':'bad')+
-    k(briefPct+'%','брифинг проведён',briefPct>=80?'good':'bad')+
-    k(mins.length?avg(mins)+' мин':'—','от передачи до приёма')+
-    k(avg(K.map(function(x){return x.log})),'записей в журнале за смену')+
+  var KA=list.map(shiftKPI);
+  function sum(f){return KA.reduce(function(a,x){return a+(+x[f]||0)},0)}
+  var hallAvg=avg(K.map(function(x){return x.hallPct}));
+  var closeAvg=avg(K.map(function(x){return x.closePct}));
+  var fullAvg=avg(K.map(function(x){return x.blocksPct}));
+
+  h+='<div class="card"><div class="card-h">Стандарт</div>'+
+     '<div class="card-s">Принято смен за период: '+acc.length+'. В fine dining норма по всем четырём — сто процентов.</div><div class="kpi">'+
+    k(hallAvg+'%','готовность зала до открытия',hallAvg>=95?'good':'bad')+
+    k(briefPct+'%','брифинг проведён',briefPct>=95?'good':'bad')+
+    k(closeAvg+'%','чек-лист закрытия',closeAvg>=95?'good':'bad')+
+    k(fullAvg+'%','полнота передачи',fullAvg>=80?'good':'bad')+
     '</div></div>';
 
-  h+='<div class="card"><div class="card-h">Задачи</div><div class="kpi">'+
-    k(closed+' / '+created,'закрыто / поставлено')+
-    k(o.length,'открыто сейчас',o.length?'':'good')+
-    k(stuck.length,'висят 3+ смены',stuck.length?'bad':'good')+
-    k(avg(o.map(function(t){return t.carried||0})),'в среднем смен в работе')+
-    '</div></div>';
-
-  var KA=list.map(shiftKPI), risk=KA.reduce(function(a,x){return a+x.banqRisk},0);
-  h+='<div class="card"><div class="card-h">Гости и риски</div>'+
+  h+='<div class="card"><div class="card-h">Гости</div>'+
      '<div class="card-s">По всем сменам периода, включая ещё не принятые.</div><div class="kpi">'+
-    k(KA.reduce(function(a,x){return a+x.complaints},0),'жалоб')+
-    k(KA.reduce(function(a,x){return a+x.promises},0),'обещаний гостям')+
-    k(risk,'банкетов без предоплаты или меню',risk?'bad':'good')+
-    k(KA.filter(function(x){return x.closePct<100}).length,'смен с неполным закрытием')+
+    k(sum('guests'),'гостей за период')+
+    k(sum('promisesOpen'),'обещаний не закрыто',sum('promisesOpen')?'bad':'good')+
+    k(sum('allergy'),'аллергий и диет отмечено')+
+    k(sum('complaints'),'жалоб')+
+    '</div></div>';
+
+  h+='<div class="card"><div class="card-h">Риски</div><div class="kpi">'+
+    k(sum('noshow'),'не пришли без предупреждения')+
+    k(sum('cancel'),'отмен в день брони')+
+    k(sum('banqRisk'),'банкетов без предоплаты или меню',sum('banqRisk')?'bad':'good')+
+    k(KA.filter(function(x){return x.hallPct<100}).length,'смен с неполной готовностью зала')+
+    '</div></div>';
+
+  h+='<div class="card"><div class="card-h">Задачи и скорость</div><div class="kpi">'+
+    k(closed+' / '+created,'закрыто / поставлено')+
+    k(o.length,'открыто сейчас')+
+    k(stuck.length,'висят 3+ смены',stuck.length?'bad':'good')+
+    k(mins.length?avg(mins)+' мин':'—','от передачи до приёма')+
     '</div></div>';
 
   h+='<div class="card"><div class="card-h">По сменам</div><div class="tw"><table class="t"><tr>'+
@@ -892,7 +942,7 @@ document.addEventListener('click',function(e){
     var s={id:uid(),date:document.getElementById('ns-date').value||today(),
            part:document.getElementById('ns-part').value,from:from,to:'',
            status:'draft',data:{},ack:{},photos:{},createdAt:Date.now()};
-    S.shifts.unshift(s);cur=s.id;view='shift';opened={__tasks:true,brief:true,log:true};
+    S.shifts.unshift(s);cur=s.id;view='shift';opened={__tasks:true,brief:true,hall:true,log:true};
     return touch();
   }
 
