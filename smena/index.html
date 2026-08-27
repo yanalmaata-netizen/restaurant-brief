@@ -200,6 +200,10 @@ table.t{border-collapse:collapse;font-size:12px;white-space:nowrap;min-width:100
 table.t th{text-align:left;font-weight:400;color:var(--muted);font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;padding:7px 11px 7px 0;border-bottom:1px solid var(--border)}
 table.t td{padding:8px 11px 8px 0;border-bottom:1px solid var(--border);font-variant-numeric:tabular-nums}
 table.t td.bad{color:var(--red)}
+table.t td.w{white-space:normal;min-width:200px;max-width:300px;line-height:1.35;vertical-align:top}
+table.t td.w span{display:-webkit-box;-webkit-line-clamp:3;line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+table.t td.n,table.t td:first-child{vertical-align:top}
+table.t td.n{text-align:center}
 
 /* МОДАЛКА ВЫГРУЗКИ */
 .mod{position:fixed;inset:0;z-index:60;background:rgba(15,13,10,.92);display:flex;align-items:center;justify-content:center;padding:18px}
@@ -207,6 +211,12 @@ table.t td.bad{color:var(--red)}
 .mod textarea{width:100%;min-height:190px;background:var(--dark3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:ui-monospace,Menlo,monospace;font-size:11px;padding:10px;outline:none;white-space:pre;overflow:auto}
 
 @media print{
+  body.pt .top,body.pt h1,body.pt .sub,body.pt .tabs,body.pt .search{display:none!important}
+  body.pt #view>*{display:none!important}
+  body.pt #gtable{display:block!important;border:none;padding:0}
+  body.pt table.t{font-size:10pt}
+  body.pt table.t td.w{max-width:none}
+  body.pt table.t td.w span{display:block;overflow:visible;-webkit-line-clamp:unset;line-clamp:unset}
   body{background:#fff;color:#000}
   body::before,.tabs,.bar,.top .cloud,.btn,.add,.item-x,.blk-ar{display:none!important}
   .wrap{max-width:none;padding:0}
@@ -224,7 +234,7 @@ table.t td.bad{color:var(--red)}
     <div class="cloud" id="cloud" data-a="who"><b>—</b>локально</div>
   </div>
   <h1>Передача <em>смены</em></h1>
-  <div class="sub" id="place">Ресторан · <span id="ver">v4.0</span></div>
+  <div class="sub" id="place">Ресторан · <span id="ver">v4.1</span></div>
   <div class="tabs">
     <button class="tab on" data-v="home">Смена</button>
     <button class="tab" data-v="guests">Гости</button>
@@ -242,7 +252,7 @@ table.t td.bad{color:var(--red)}
    Хранение: KV на сервере (побеждает) → localStorage → пусто.
    Правка схемы блоков — только в BLOCKS ниже.
    ============================================================ */
-var VER='4.0', LSKEY='guestup_smena_v1', MEKEY='guestup_smena_staff', API='/api/smena';
+var VER='4.1', LSKEY='guestup_smena_v1', MEKEY='guestup_smena_staff', API='/api/smena';
 
 /* ---------- СХЕМА БЛОКОВ ПЕРЕДАЧИ ---------- */
 var BLOCKS=[
@@ -831,6 +841,59 @@ function guestHTML(g){
   h+='<div class="btns"><button class="btn ghost sm" data-a="gdel:'+g.id+'">Удалить гостя</button></div>';
   return h+'</div></div>';
 }
+var gOnly=2;
+function openPromises(g){
+  var n=0;
+  S.shifts.forEach(function(s){
+    ((((s.data||{}).guestcase||{}).__list)||[]).forEach(function(it){
+      if(it.__guest===g.id&&it.kind==='Обещание гостю'&&it.status!=='Закрыто')n++;
+    });
+  });
+  return n;
+}
+var GCOLS=['Гость','Визитов','Последний визит','Стол','Предпочтения','Аллергии и диеты','Что важно знать','Открытых обещаний'];
+function regulars(){
+  return S.guests.filter(function(g){return (g.visits||[]).length>=gOnly})
+    .sort(function(a,b){return (b.visits||[]).length-(a.visits||[]).length});
+}
+function guestRows(){
+  var rows=[GCOLS.slice()];
+  regulars().forEach(function(g){
+    var v=g.visits||[], last=v.length?v[v.length-1]:null;
+    rows.push([g.name||'',String(v.length),last?rus(last.date):'',g.table||'',
+               g.prefs||'',g.allergy||'',g.note||'',String(openPromises(g))]);
+  });
+  return rows;
+}
+function guestTable(){
+  var list=regulars();
+  var h='<div class="card" id="gtable"><div class="card-h">Таблица предпочтений</div>'+
+     '<div class="card-s">'+esc(S.place)+' · распечатайте и разберите на брифинге: кто придёт, где сажать, что наливать, чего не выносить.</div>'+
+     '<div class="seg">'+
+     [[2,'Постоянные'],[0,'Все гости']].map(function(x){
+       return '<button class="'+(gOnly===x[0]?'on':'')+'" data-a="gseg:'+x[0]+'">'+x[1]+'</button>'}).join('')+
+     '</div>';
+  if(!list.length){
+    h+='<div class="empty">'+(gOnly?'Постоянных пока нет. Гость становится постоянным со второго визита.':'Книга пуста.')+'</div>';
+    return h+'</div>';
+  }
+  h+='<div class="tw"><table class="t"><tr>'+GCOLS.map(function(c){return '<th>'+esc(c)+'</th>'}).join('')+'</tr>';
+  list.forEach(function(g){
+    var v=g.visits||[], last=v.length?v[v.length-1]:null, pr=openPromises(g);
+    h+='<tr><td>'+esc(g.name||'—')+'</td>'+
+       '<td class="n">'+v.length+'</td>'+
+       '<td>'+(last?esc(rus(last.date)):'—')+'</td>'+
+       '<td class="n">'+esc(g.table||'—')+'</td>'+
+       '<td class="w"><span>'+esc(g.prefs||'—')+'</span></td>'+
+       '<td class="w'+(g.allergy?' bad':'')+'"><span>'+esc(g.allergy||'—')+'</span></td>'+
+       '<td class="w"><span>'+esc(g.note||'—')+'</span></td>'+
+       '<td class="n'+(pr?' bad':'')+'">'+(pr||'—')+'</td></tr>';
+  });
+  h+='</table></div><div class="btns">'+
+     '<button class="btn ghost" data-a="gcopy">Скопировать таблицу</button>'+
+     '<button class="btn ghost" data-a="gprint">Печать</button></div>';
+  return h+'</div>';
+}
 function viewGuests(){
   var list=S.guests.slice();
   if(gq.trim()){
@@ -846,6 +909,7 @@ function viewGuests(){
      k(S.guests.filter(function(g){return g.allergy}).length,'с аллергией или диетой',
        S.guests.filter(function(g){return g.allergy}).length?'bad':'')+
      '</div></div>';
+  h+=guestTable();
   if(!list.length)h+='<div class="card"><div class="empty">'+(gq?'Никого не нашли':'Книга пуста')+'</div></div>';
   list.forEach(function(g){h+=guestHTML(g)});
   h+='<div class="card"><div class="card-h">Новый гость</div>'+
@@ -1195,6 +1259,14 @@ document.addEventListener('click',function(e){
   if(a==='logdel'){
     if(!confirm('Удалить запись из журнала?'))return;
     D(sh,'log').__log.splice(+a1,1);return touch();
+  }
+  if(a==='gseg'){gOnly=+a1;return render()}
+  if(a==='gcopy'){return showExport(toTSV(guestRows()))}
+  if(a==='gprint'){
+    document.body.classList.add('pt');
+    window.print();
+    setTimeout(function(){document.body.classList.remove('pt')},800);
+    return;
   }
   if(a==='gtog'){gOpen[a1]=!gOpen[a1];return render()}
   if(a==='gadd'){
