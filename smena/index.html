@@ -234,7 +234,7 @@ table.t td.n{text-align:center}
     <div class="cloud" id="cloud" data-a="who"><b>—</b>локально</div>
   </div>
   <h1>Передача <em>смены</em></h1>
-  <div class="sub" id="place">Ресторан · <span id="ver">v4.1</span></div>
+  <div class="sub" id="place">Ресторан · <span id="ver">v4.2</span></div>
   <div class="tabs">
     <button class="tab on" data-v="home">Смена</button>
     <button class="tab" data-v="guests">Гости</button>
@@ -252,7 +252,7 @@ table.t td.n{text-align:center}
    Хранение: KV на сервере (побеждает) → localStorage → пусто.
    Правка схемы блоков — только в BLOCKS ниже.
    ============================================================ */
-var VER='4.1', LSKEY='guestup_smena_v1', MEKEY='guestup_smena_staff', API='/api/smena';
+var VER='4.2', LSKEY='guestup_smena_v1', MEKEY='guestup_smena_staff', API='/api/smena';
 
 /* ---------- СХЕМА БЛОКОВ ПЕРЕДАЧИ ---------- */
 var BLOCKS=[
@@ -343,12 +343,13 @@ var BLOCKS=[
        {k:'action',ty:'area',l:'Что сделано, кто вызван'},
        {k:'deadline',ty:'txt',l:'Срок'}]},
 
-{id:'staff',ic:'👥',t:'Персонал',
+{id:'staff',ic:'👥',t:'Люди смены',
+ hint:'То, чего нет ни в CRM, ни в таск-менеджере: кто как отработал сегодня. Через месяц по этим строкам видно, кого повышать, с кем говорить и кого вы вообще перестали замечать.',
  fields:[{k:'stations',ty:'area',l:'Расстановка по секциям на следующую смену'},
          {k:'tomorrow',ty:'area',l:'Кого не хватает и что с этим делать'}],
  item:[{k:'who',ty:'txt',l:'Кто'},
-       {k:'what',ty:'sel',l:'Что',o:['Не вышел','Опоздал','Стажёр','Замена','Конфликт','Отпросился']},
-       {k:'note',ty:'area',l:'Подробности'}]},
+       {k:'what',ty:'sel',l:'Как отработал',o:['Отработал отлично','Похвалить при всех','Растёт — дать больше','Нужен разговор','На грани, устал','Конфликт','Не вышел','Опоздал','Отпросился','Стажёр']},
+       {k:'note',ty:'area',l:'Что именно заметили — конкретно, а не «молодец»'}]},
 
 {id:'money',ic:'💰',t:'Касса',
  confirm:'Касса пересчитана; расхождений нет либо расхождение описано выше',
@@ -919,6 +920,30 @@ function viewGuests(){
   return h;
 }
 
+/* ---------- УПОМИНАНИЯ ЛЮДЕЙ ---------- */
+var GOOD=['Отработал отлично','Похвалить при всех','Растёт — дать больше'];
+var WARN=['Нужен разговор','На грани, устал','Конфликт','Не вышел','Опоздал'];
+var sOpen={};
+function mentions(name){
+  var n=String(name||'').trim().toLowerCase(), out=[];
+  if(n.length<2)return out;
+  S.shifts.forEach(function(s){
+    ((((s.data||{}).staff||{}).__list)||[]).forEach(function(it){
+      if(!it.who)return;
+      if(String(it.who).toLowerCase().indexOf(n)<0)return;
+      out.push({date:s.date,at:s.createdAt||0,tag:it.what||'',note:it.note||'',by:s.from||''});
+    });
+  });
+  return out.sort(function(a,b){return a.date<b.date?1:-1});
+}
+function mentionHTML(m){
+  var cls=GOOD.indexOf(m.tag)>=0?'var(--green)':(WARN.indexOf(m.tag)>=0?'var(--red)':'var(--muted)');
+  return '<div class="le"><div class="le-t">'+esc(rus(m.date))+'</div><div class="le-b">'+
+    (m.tag?'<div style="font-size:11px;color:'+cls+';margin-bottom:2px">'+esc(m.tag)+'</div>':'')+
+    '<div class="le-x">'+esc(m.note||'—')+'</div>'+
+    (m.by?'<div class="le-w">записал '+esc(m.by)+'</div>':'')+'</div></div>';
+}
+
 /* ---------- KPI И ВЫГРУЗКА ---------- */
 /* Считаем то же, что меряют Jolt, Zenput и Trail: процент выполнения,
    скорость закрытия и что осталось незакрытым. */
@@ -1048,6 +1073,21 @@ function viewRep(){
     k(KA.filter(function(x){return x.hallPct<100}).length,'смен с неполной готовностью зала')+
     '</div></div>';
 
+  var mAll=[];
+  list.forEach(function(s){
+    ((((s.data||{}).staff||{}).__list)||[]).forEach(function(it){if(it.who)mAll.push(it.what||'')});
+  });
+  var mGood=mAll.filter(function(x){return GOOD.indexOf(x)>=0}).length;
+  var mWarn=mAll.filter(function(x){return WARN.indexOf(x)>=0}).length;
+  var unseen=S.staff.filter(function(x){return !mentions(x.name).length}).length;
+  h+='<div class="card"><div class="card-h">Люди</div>'+
+     '<div class="card-s">Кого заметили за период и с каким знаком.</div><div class="kpi">'+
+    k(mAll.length,'упоминаний в сменах')+
+    k(mGood,'в плюс',mGood?'good':'')+
+    k(mWarn,'в минус',mWarn?'bad':'')+
+    k(unseen,'сотрудников без единого упоминания',unseen?'bad':'good')+
+    '</div></div>';
+
   h+='<div class="card"><div class="card-h">Задачи и скорость</div><div class="kpi">'+
     k(closed+' / '+created,'закрыто / поставлено')+
     k(o.length,'открыто сейчас')+
@@ -1074,10 +1114,20 @@ function viewRep(){
   h+='<div class="card"><div class="card-h">Сотрудники</div>'+
      '<div class="card-s">Под этими именами стоят подписи в приёме смены. PIN разделяет ответственность между своими; от постороннего защищает Cloudflare Access на проекте.</div>';
   S.staff.forEach(function(x){
-    h+='<div class="st-row"><div class="st-n">'+esc(x.name)+(x.id===meId?' · вы':'')+
-       '<span>'+esc(x.role)+'</span></div>'+
-       '<button class="btn ghost sm" data-a="staffpin:'+x.id+'">Сменить PIN</button>'+
-       (isBoss()&&x.id!==meId?'<button class="btn ghost sm" data-a="staffdel:'+x.id+'">×</button>':'')+'</div>';
+    var mn=mentions(x.name), g=mn.filter(function(m){return GOOD.indexOf(m.tag)>=0}).length,
+        w=mn.filter(function(m){return WARN.indexOf(m.tag)>=0}).length;
+    h+='<div class="st-row" data-a="stog:'+x.id+'" style="cursor:pointer"><div class="st-n">'+
+       esc(x.name)+(x.id===meId?' · вы':'')+'<span>'+esc(x.role)+' · упоминаний '+mn.length+
+       (g?' · <b style="color:var(--green)">'+g+' в плюс</b>':'')+
+       (w?' · <b style="color:var(--red)">'+w+' в минус</b>':'')+'</span></div>'+
+       '<div class="blk-ar" style="transform:rotate('+(sOpen[x.id]?'90':'0')+'deg)">▸</div></div>';
+    if(sOpen[x.id]){
+      h+='<div style="padding:2px 0 12px">';
+      if(!mn.length)h+='<div class="empty">Ни одного упоминания. Человека не замечают — это тоже сигнал.</div>';
+      mn.slice(0,12).forEach(function(m){h+=mentionHTML(m)});
+      h+='<div class="btns"><button class="btn ghost sm" data-a="staffpin:'+x.id+'">Сменить PIN</button>'+
+         (isBoss()&&x.id!==meId?'<button class="btn ghost sm" data-a="staffdel:'+x.id+'">Удалить</button>':'')+'</div></div>';
+    }
   });
   if(isBoss()){
     h+='<div style="margin-top:14px"><div class="row2">'+
@@ -1193,6 +1243,7 @@ document.addEventListener('click',function(e){
     if(confirm('Выйти из аккаунта «'+me+'»?')){setMe(null);loginPick=null;cloudStatus();render()}
     return;
   }
+  if(a==='stog'){sOpen[a1]=!sOpen[a1];return render()}
   if(a==='staffadd'){
     if(!isBoss()){toast('Добавлять сотрудников может только управляющий');return}
     var an=(document.getElementById('sa-name').value||'').trim();
