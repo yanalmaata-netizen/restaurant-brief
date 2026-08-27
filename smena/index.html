@@ -234,7 +234,7 @@ table.t td.n{text-align:center}
     <div class="cloud" id="cloud" data-a="who"><b>—</b>локально</div>
   </div>
   <h1>Передача <em>смены</em></h1>
-  <div class="sub" id="place">Ресторан · <span id="ver">v4.2</span></div>
+  <div class="sub" id="place">Ресторан · <span id="ver">v4.3</span></div>
   <div class="tabs">
     <button class="tab on" data-v="home">Смена</button>
     <button class="tab" data-v="guests">Гости</button>
@@ -252,7 +252,7 @@ table.t td.n{text-align:center}
    Хранение: KV на сервере (побеждает) → localStorage → пусто.
    Правка схемы блоков — только в BLOCKS ниже.
    ============================================================ */
-var VER='4.2', LSKEY='guestup_smena_v1', MEKEY='guestup_smena_staff', API='/api/smena';
+var VER='4.3', LSKEY='guestup_smena_v1', MEKEY='guestup_smena_staff', API='/api/smena';
 
 /* ---------- СХЕМА БЛОКОВ ПЕРЕДАЧИ ---------- */
 var BLOCKS=[
@@ -350,6 +350,21 @@ var BLOCKS=[
  item:[{k:'who',ty:'txt',l:'Кто'},
        {k:'what',ty:'sel',l:'Как отработал',o:['Отработал отлично','Похвалить при всех','Растёт — дать больше','Нужен разговор','На грани, устал','Конфликт','Не вышел','Опоздал','Отпросился','Стажёр']},
        {k:'note',ty:'area',l:'Что именно заметили — конкретно, а не «молодец»'}]},
+
+{id:'workly',ic:'🕘',t:'Учёт времени · Workly',
+ confirm:'Отметки Face ID проверены — и за эту смену, и за прошлые дни',
+ hint:'Кто не отметился по Face ID, тот не попал в табель, а значит и в зарплату. Разбирать в ту же смену, пока все помнят, а не в конце месяца по памяти.',
+ url:{k:'workly',l:'Открыть табель Workly'},
+ fields:[{k:'all',ty:'chk',l:'Все, кто был на смене, отметились по Face ID на вход и на выход'},
+         {k:'past',ty:'chk',l:'Табель за прошлые дни просмотрен, незакрытых хвостов нет'},
+         {k:'note',ty:'area',l:'Что в табеле не сходится'}],
+ mk:{owner:'owner',due:'',text:function(it){
+   return 'Workly: '+[it.who,it.date?rus(it.date):'',it.what].filter(Boolean).join(' — ')+(it.action?'. '+it.action:'')}},
+ item:[{k:'who',ty:'txt',l:'Кто не прошёл'},
+       {k:'date',ty:'date',l:'За какой день'},
+       {k:'what',ty:'sel',l:'Что не так',o:['Не отметился на вход','Не отметился на выход','Смена не закрыта в табеле','Опоздание не подтверждено','Отметка за другого']},
+       {k:'action',ty:'area',l:'Что сделать: с кем поговорить, что проставить в табеле'},
+       {k:'owner',ty:'txt',l:'Кто отрабатывает'}]},
 
 {id:'money',ic:'💰',t:'Касса',
  confirm:'Касса пересчитана; расхождений нет либо расхождение описано выше',
@@ -464,8 +479,8 @@ function loadCloud(){
 }
 function saveCloud(force){
   if(!cloudOK)return Promise.resolve();
-  var body={rev:S.rev,state:{place:S.place,sheet:S.sheet||'',staff:S.staff,guests:S.guests,
-    shifts:S.shifts,tasks:S.tasks},force:!!force};
+  var body={rev:S.rev,state:{place:S.place,sheet:S.sheet||'',workly:S.workly||'',crm:S.crm||'',
+    tasker:S.tasker||'',staff:S.staff,guests:S.guests,shifts:S.shifts,tasks:S.tasks},force:!!force};
   return fetch(API,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
    .then(function(r){
      if(r.status===409){
@@ -559,6 +574,8 @@ function blockHTML(sh,b,mode){
   var h='<div class="'+cls+'" id="b-'+b.id+'"><div class="blk-h" data-a="tog:'+b.id+'">'+
         '<div class="blk-ic">'+b.ic+'</div><div class="blk-t">'+esc(b.t)+'</div>'+badge+'<div class="blk-ar">▸</div></div><div class="blk-b">';
   if(b.hint&&!ro)h+='<div class="hint">'+esc(b.hint)+'</div>';
+  if(b.url&&S[b.url.k])h+='<a class="btn ghost sm" href="'+esc(S[b.url.k])+'" target="_blank" rel="noopener" '+
+    'style="text-decoration:none;margin-bottom:13px">'+esc(b.url.l)+' ↗</a>';
 
   var body='';
   if(b.ty==='log'){
@@ -975,6 +992,7 @@ function shiftKPI(s){
             bq.filter(function(x){return String(x.allergy||'').trim()}).length;
   k.banqRisk=bq.filter(function(x){return x.dep==='Нет'||x.menu==='Не согласовано'}).length;
   k.log=(((s.data.log||{}).__log)||[]).length;
+  k.noface=(((s.data.workly||{}).__list)||[]).length;
   k.created=S.tasks.filter(function(t){return t.from===s.id}).length;
   k.closed=S.tasks.filter(function(t){return t.doneShift===s.id}).length;
   return k;
@@ -984,7 +1002,8 @@ var COLS=[['Дата','date'],['Смена','part'],['Сдал','from'],['При
   ['Чек-лист закрытия, %','closePct'],['Брифинг','brief'],['Записей в журнале','log'],
   ['Гостей','guests'],['No-show','noshow'],['Отмен','cancel'],
   ['Жалоб','complaints'],['Обещаний открыто','promisesOpen'],['Аллергий отмечено','allergy'],
-  ['Банкетов на контроле','banqRisk'],['Задач поставлено','created'],['Задач закрыто','closed']];
+  ['Банкетов на контроле','banqRisk'],['Не прошли Face ID','noface'],
+  ['Задач поставлено','created'],['Задач закрыто','closed']];
 function tableRows(list){
   var rows=[COLS.map(function(c){return c[0]})];
   list.forEach(function(s){var k=shiftKPI(s);rows.push(COLS.map(function(c){var v=k[c[1]];return v==null?'':String(v)}))});
@@ -1086,6 +1105,7 @@ function viewRep(){
     k(mGood,'в плюс',mGood?'good':'')+
     k(mWarn,'в минус',mWarn?'bad':'')+
     k(unseen,'сотрудников без единого упоминания',unseen?'bad':'good')+
+    k(sum('noface'),'не прошли Face ID в Workly',sum('noface')?'bad':'good')+
     '</div></div>';
 
   h+='<div class="card"><div class="card-h">Задачи и скорость</div><div class="kpi">'+
@@ -1143,6 +1163,12 @@ function viewRep(){
      '<div class="f"><label>Ссылка</label><input type="text" data-set="sheet" value="'+esc(S.sheet||'')+'" placeholder="https://script.google.com/macros/s/…/exec"></div>'+
      '<button class="btn ghost sm" data-a="sheetnow">Отправить все смены за период</button>'+
      '<div class="note">Код скрипта для таблицы — в README проекта.</div></div>';
+
+  h+='<div class="card"><div class="card-h">Ссылки на смежные системы</div>'+
+     '<div class="card-s">Открываются из блоков передачи одним тапом, чтобы не искать по вкладкам.</div>'+
+     '<div class="f"><label>Табель Workly</label><input type="text" data-set="workly" value="'+esc(S.workly||'')+'" placeholder="https://…workly…"></div>'+
+     '<div class="f"><label>CRM: карточки гостей</label><input type="text" data-set="crm" value="'+esc(S.crm||'')+'" placeholder="ссылка на CRM"></div>'+
+     '<div class="f"><label>Таск-менеджер</label><input type="text" data-set="tasker" value="'+esc(S.tasker||'')+'" placeholder="ссылка на доску задач"></div></div>';
   return h;
 }
 function k(v,l,cls){return '<div class="k"><div class="k-v'+(cls?' '+cls:'')+'">'+esc(v)+'</div><div class="k-l">'+esc(l)+'</div></div>'}
