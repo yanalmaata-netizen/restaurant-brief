@@ -234,7 +234,7 @@ table.t td.n{text-align:center}
     <div class="cloud" id="cloud" data-a="who"><b>—</b>локально</div>
   </div>
   <h1>Передача <em>смены</em></h1>
-  <div class="sub" id="place">Ресторан · <span id="ver">v4.4</span></div>
+  <div class="sub" id="place">Ресторан · <span id="ver">v4.5</span></div>
   <div class="tabs">
     <button class="tab on" data-v="home">Смена</button>
     <button class="tab" data-v="guests">Гости</button>
@@ -252,7 +252,7 @@ table.t td.n{text-align:center}
    Хранение: KV на сервере (побеждает) → localStorage → пусто.
    Правка схемы блоков — только в BLOCKS ниже.
    ============================================================ */
-var VER='4.4', LSKEY='guestup_smena_v1', MEKEY='guestup_smena_staff', API='/api/smena';
+var VER='4.5', LSKEY='guestup_smena_v1', MEKEY='guestup_smena_staff', API='/api/smena';
 
 /* ---------- СХЕМА БЛОКОВ ПЕРЕДАЧИ ---------- */
 var BLOCKS=[
@@ -287,8 +287,8 @@ var BLOCKS=[
  hint:'Записывайте по ходу смены, а не в конце. Каждая запись со временем — потом видно, когда что случилось.'},
 
 {id:'guestcase',ic:'🙋',ph:1,t:'Гости вечера',
- hint:'Здесь только события этой смены. Полная карточка гостя, история и брони живут в DIOCRM — дублировать их сюда не нужно.',
- url:{k:'crm',l:'Открыть DIOCRM'},
+ hint:'Здесь только события этой смены. Полная карточка гостя, история и брони живут в Dio — дублировать их сюда не нужно.',
+ url:{k:'crm',l:'Открыть Dio'},
  mk:{owner:'owner',due:'',text:function(it){return (it.kind||'Гость')+': '+[it.who,it.what].filter(Boolean).join(' — ')}},
  mg:1,
  item:[{k:'kind',ty:'sel',l:'Что',o:['Обещание гостю','Аллергия / диета','VIP или постоянный гость','Повод: годовщина, ДР','Жалоба','Комплимент','Забытая вещь']},
@@ -299,8 +299,8 @@ var BLOCKS=[
 
 {id:'banquets',ic:'🥂',t:'Резервы и банкеты',
  confirm:'Резервы и банкеты на завтра проверены: предоплаты, меню, аллергии, тайминг',
- hint:'Сами брони живут в DIOCRM. Сюда выносим только то, что требует действия до следующей смены.',
- url:{k:'crm',l:'Открыть DIOCRM'},
+ hint:'Сами брони живут в Dio. Сюда выносим только то, что требует действия до следующей смены.',
+ url:{k:'crm',l:'Открыть Dio'},
  fields:[{k:'noshow',ty:'num',l:'Не пришли без предупреждения (no-show)'},
          {k:'cancel',ty:'num',l:'Отмены в день брони'}],
  item:[{k:'date',ty:'date',l:'Дата'},{k:'name',ty:'txt',l:'Гость / повод'},
@@ -431,7 +431,7 @@ function micStart(id){
 
 /* ---------- СОСТОЯНИЕ ---------- */
 var LINKS={
-  crm:'https://dio-crm-new-version-0425.up.railway.app/',      /* DIOCRM: гости и брони */
+  crm:'https://dio-crm-new-version-0425.up.railway.app/',      /* Dio: гости и брони */
   tasker:'https://avasol-doitok.avaplatforms.com/',            /* doit.ok: задачи */
   workly:'https://t.me/dio_reports_bot'                        /* бот отчётов, ведёт в Workly */
 };
@@ -845,7 +845,7 @@ function findGuest(name,phone){
   });
   return r;
 }
-var GF=[{k:'name',l:'Имя'},{k:'phone',l:'Телефон'},{k:'link',l:'Ссылка на карточку в DIOCRM'},{k:'table',l:'Любимый стол'},
+var GF=[{k:'name',l:'Имя'},{k:'phone',l:'Телефон'},{k:'link',l:'Ссылка на карточку в Dio'},{k:'table',l:'Любимый стол'},
         {k:'prefs',l:'Предпочтения: вино, посадка, темп подачи',a:1},
         {k:'allergy',l:'Аллергии и диеты',a:1},
         {k:'note',l:'Что важно знать',a:1}];
@@ -857,7 +857,7 @@ function guestHTML(g){
     (g.allergy?'<div style="font-size:11px;color:var(--red);margin-top:2px">'+esc(g.allergy)+'</div>':
       (g.prefs?'<div style="font-size:11px;color:var(--muted);margin-top:2px">'+esc(cut(g.prefs,58))+'</div>':''))+
     '</div><div class="blk-n">'+v.length+'</div><div class="blk-ar">▸</div></div><div class="blk-b">';
-  if(g.link)h+='<a class="btn ghost sm" href="'+esc(g.link)+'" target="_blank" rel="noopener" style="text-decoration:none;margin-bottom:12px">Карточка в DIOCRM ↗</a>';
+  if(g.link)h+='<a class="btn ghost sm" href="'+esc(g.link)+'" target="_blank" rel="noopener" style="text-decoration:none;margin-bottom:12px">Карточка в Dio ↗</a>';
   GF.forEach(function(f){
     var val=g[f.k]==null?'':g[f.k];
     var at='data-g="'+g.id+'" data-k="'+f.k+'"';
@@ -1191,10 +1191,10 @@ function viewRep(){
 
   h+='<div class="card"><div class="card-h">Ссылки на смежные системы</div>'+
      '<div class="card-s">Открываются из блоков передачи одним тапом, чтобы не искать по вкладкам.</div>'+
-     '<div class="f"><label>DIOCRM — гости и брони</label><input type="text" data-set="crm" value="'+esc(S.crm||'')+'"></div>'+
+     '<div class="f"><label>Dio — гости и брони</label><input type="text" data-set="crm" value="'+esc(S.crm||'')+'"></div>'+
      '<div class="f"><label>doit.ok — задачи</label><input type="text" data-set="tasker" value="'+esc(S.tasker||'')+'"></div>'+
      '<div class="f"><label>Бот отчётов — табель Workly</label><input type="text" data-set="workly" value="'+esc(S.workly||'')+'"></div>'+
-     '<div class="note">Источник истины по гостям — DIOCRM, по долгим задачам — doit.ok, по табелю — Workly. Передача смены на них ссылается, а не дублирует их.</div></div>';
+     '<div class="note">Источник истины по гостям — Dio, по долгим задачам — doit.ok, по табелю — Workly. Передача смены на них ссылается, а не дублирует их.</div></div>';
   return h;
 }
 function k(v,l,cls){return '<div class="k"><div class="k-v'+(cls?' '+cls:'')+'">'+esc(v)+'</div><div class="k-l">'+esc(l)+'</div></div>'}

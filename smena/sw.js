@@ -1,7 +1,7 @@
 /* Service worker: приложение открывается без сети.
    Данные всё равно лежат в localStorage, поэтому офлайн — это рабочий режим,
    а не заглушка. Поднимайте CACHE при каждом изменении index.html. */
-const CACHE = 'smena-v4.4';
+const CACHE = 'smena-v4.5';
 const SHELL = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
