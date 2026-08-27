@@ -195,6 +195,12 @@ h1 em{font-style:italic;color:var(--gold)}
 .seg{display:flex;gap:6px;margin-bottom:14px}
 .seg button{flex:1;background:var(--dark3);border:1px solid var(--border);border-radius:8px;color:var(--muted);font-family:inherit;font-size:12.5px;padding:9px 4px;cursor:pointer}
 .seg button.on{border-color:var(--gold);color:var(--gold)}
+.sys{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:12px}
+.sys a{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;
+  background:var(--dark3);border:1px solid var(--border);border-radius:10px;padding:13px 6px;
+  color:var(--text);text-decoration:none;font-size:13px;text-align:center}
+.sys a:hover{border-color:var(--gold);color:var(--gold)}
+.sys a span{font-size:10px;color:var(--muted);letter-spacing:.03em}
 .tw{overflow-x:auto;margin-top:12px;-webkit-overflow-scrolling:touch}
 table.t{border-collapse:collapse;font-size:12px;white-space:nowrap;min-width:100%}
 table.t th{text-align:left;font-weight:400;color:var(--muted);font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;padding:7px 11px 7px 0;border-bottom:1px solid var(--border)}
@@ -234,7 +240,7 @@ table.t td.n{text-align:center}
     <div class="cloud" id="cloud" data-a="who"><b>—</b>локально</div>
   </div>
   <h1>Передача <em>смены</em></h1>
-  <div class="sub" id="place">Ресторан · <span id="ver">v4.5</span></div>
+  <div class="sub" id="place">Ресторан · <span id="ver">v4.6</span></div>
   <div class="tabs">
     <button class="tab on" data-v="home">Смена</button>
     <button class="tab" data-v="guests">Гости</button>
@@ -252,7 +258,7 @@ table.t td.n{text-align:center}
    Хранение: KV на сервере (побеждает) → localStorage → пусто.
    Правка схемы блоков — только в BLOCKS ниже.
    ============================================================ */
-var VER='4.5', LSKEY='guestup_smena_v1', MEKEY='guestup_smena_staff', API='/api/smena';
+var VER='4.6', LSKEY='guestup_smena_v1', MEKEY='guestup_smena_staff', API='/api/smena';
 
 /* ---------- СХЕМА БЛОКОВ ПЕРЕДАЧИ ---------- */
 var BLOCKS=[
@@ -470,9 +476,11 @@ function partName(p){return p==='night'?'Вечер / закрытие':'Утр�
 
 /* ---------- ХРАНЕНИЕ ---------- */
 function norm(){S.staff=S.staff||[];S.guests=S.guests||[];S.tasks=S.tasks||[];S.shifts=S.shifts||[];
-  if(S.crm==null)S.crm=LINKS.crm;
-  if(S.tasker==null)S.tasker=LINKS.tasker;
-  if(S.workly==null)S.workly=LINKS.workly;
+  /* Пустая строка из старого сохранения не должна перекрывать адрес:
+     проверяем на пустоту, а не на null. */
+  if(!S.crm)S.crm=LINKS.crm;
+  if(!S.tasker)S.tasker=LINKS.tasker;
+  if(!S.workly)S.workly=LINKS.workly;
   var st=currentStaff();me=st?st.name:'';}
 function saveLocal(){try{localStorage.setItem(LSKEY,JSON.stringify(S))}catch(e){}}
 function loadLocal(){try{var r=localStorage.getItem(LSKEY);if(r){var o=JSON.parse(r);if(o&&o.shifts)S=o}}catch(e){}norm()}
@@ -531,8 +539,8 @@ function taskHTML(t){
        (t.carried?'<span class="pill'+(hot?' hot':'')+'">висит '+t.carried+' смен</span>':'');
   }
   h+='</div>';
-  if(S.tasker&&!t.done)h+='<a class="tc-b" href="'+esc(S.tasker)+'" target="_blank" rel="noopener" '+
-    'data-a="tcopy:'+t.id+'" style="text-decoration:none;display:inline-block;margin-right:14px">В doit.ok ↗</a>';
+  if(S.tasker&&!t.done)h+='<a class="btn ghost sm" href="'+esc(S.tasker)+'" target="_blank" rel="noopener" '+
+    'data-a="tcopy:'+t.id+'" style="text-decoration:none;margin:8px 0 2px">В doit.ok ↗</a>';
   h+='<div class="tc">';
   cm.forEach(function(c){h+='<div class="tc-i"><b>'+esc(c.by)+' · '+when(c.at)+'</b><br>'+esc(c.text)+'</div>'});
   h+='<div class="tc-f"><input type="text" id="cm-'+t.id+'" placeholder="Комментарий: что сделано или почему стоит">'+
@@ -589,7 +597,8 @@ function blockHTML(sh,b,mode){
         '<div class="blk-ic">'+b.ic+'</div><div class="blk-t">'+esc(b.t)+'</div>'+badge+'<div class="blk-ar">▸</div></div><div class="blk-b">';
   if(b.hint&&!ro)h+='<div class="hint">'+esc(b.hint)+'</div>';
   if(b.url&&S[b.url.k])h+='<a class="btn ghost sm" href="'+esc(S[b.url.k])+'" target="_blank" rel="noopener" '+
-    'style="text-decoration:none;margin-bottom:13px">'+esc(b.url.l)+' ↗</a>';
+    'style="text-decoration:none;margin-bottom:14px;border-color:rgba(201,168,76,.45);color:var(--gold)">'+
+    esc(b.url.l)+' ↗</a>';
 
   var body='';
   if(b.ty==='log'){
@@ -788,6 +797,14 @@ function viewHome(){
       '<div class="note">Сдаёт: '+esc(me)+'</div>'+
       '<button class="btn" data-a="new" style="margin-top:12px">Начать</button></div>';
   }
+
+  h+='<div class="card"><div class="card-h">Смежные системы</div>'+
+     '<div class="card-s">Гости и брони — в Dio, долгие задачи — в doit.ok, табель и Face ID — в боте отчётов. Передача смены на них ссылается, а не дублирует.</div>'+
+     '<div class="sys">'+
+     '<a href="'+esc(S.crm)+'" target="_blank" rel="noopener">Dio<span>гости, брони</span></a>'+
+     '<a href="'+esc(S.tasker)+'" target="_blank" rel="noopener">doit.ok<span>задачи</span></a>'+
+     '<a href="'+esc(S.workly)+'" target="_blank" rel="noopener">Табель<span>Workly, Face&nbsp;ID</span></a>'+
+     '</div></div>';
 
   var hot=openTasks().filter(function(t){return t.carried>=2}).slice(0,5);
   if(hot.length){
