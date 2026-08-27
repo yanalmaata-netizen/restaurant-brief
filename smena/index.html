@@ -5,6 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#0F0D0A">
 <title>Передача смены · GuestUP</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Смена">
+<meta name="mobile-web-app-capable" content="yes">
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -31,7 +38,7 @@ h1 em{font-style:italic;color:var(--gold)}
 
 /* ВКЛАДКИ */
 .tabs{display:flex;gap:6px;margin-bottom:20px;border-bottom:1px solid var(--border)}
-.tab{flex:1;background:none;border:none;color:var(--muted);font-family:inherit;font-size:12.5px;font-weight:400;padding:10px 4px;cursor:pointer;border-bottom:2px solid transparent;letter-spacing:.03em}
+.tab{flex:1;background:none;border:none;color:var(--muted);font-family:inherit;font-size:11.5px;font-weight:400;padding:10px 2px;cursor:pointer;border-bottom:2px solid transparent;letter-spacing:.03em}
 .tab.on{color:var(--gold);border-bottom-color:var(--gold)}
 
 /* КАРТОЧКИ */
@@ -168,6 +175,17 @@ h1 em{font-style:italic;color:var(--gold)}
 .pg{height:4px;background:var(--dark3);border-radius:3px;overflow:hidden;margin-top:11px}
 .pg i{display:block;height:100%;background:var(--gold);border-radius:3px;transition:width .3s}
 
+/* ВХОД */
+.who{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:14px}
+.who button{background:var(--dark3);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:inherit;font-size:15px;padding:16px 10px;cursor:pointer}
+.who button:hover{border-color:var(--gold);color:var(--gold)}
+.pin{width:100%;background:var(--dark3);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:inherit;font-size:24px;letter-spacing:.4em;text-align:center;padding:14px;outline:none}
+.pin:focus{border-color:var(--gold)}
+.st-row{display:flex;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid var(--border)}
+.st-row:last-child{border-bottom:none}
+.st-n{flex:1;font-size:14px}
+.st-n span{display:block;font-size:11px;color:var(--muted);margin-top:2px}
+
 /* ОТЧЁТ */
 .kpi{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:12px}
 .k{background:var(--dark3);border:1px solid var(--border);border-radius:10px;padding:12px}
@@ -203,12 +221,13 @@ table.t td.bad{color:var(--red)}
 <div class="wrap">
   <div class="top">
     <div class="logo"><div class="logo-hex"></div><div class="logo-text">GuestUP</div></div>
-    <div class="cloud" id="cloud"><b>—</b>локально</div>
+    <div class="cloud" id="cloud" data-a="who"><b>—</b>локально</div>
   </div>
   <h1>Передача <em>смены</em></h1>
-  <div class="sub" id="place">Ресторан · <span id="ver">v3.1</span></div>
+  <div class="sub" id="place">Ресторан · <span id="ver">v4.0</span></div>
   <div class="tabs">
-    <button class="tab on" data-v="home">Сейчас</button>
+    <button class="tab on" data-v="home">Смена</button>
+    <button class="tab" data-v="guests">Гости</button>
     <button class="tab" data-v="tasks">Задачи</button>
     <button class="tab" data-v="rep">Отчёт</button>
     <button class="tab" data-v="arch">Архив</button>
@@ -223,7 +242,7 @@ table.t td.bad{color:var(--red)}
    Хранение: KV на сервере (побеждает) → localStorage → пусто.
    Правка схемы блоков — только в BLOCKS ниже.
    ============================================================ */
-var VER='3.1', LSKEY='guestup_smena_v1', MEKEY='guestup_smena_me', API='/api/smena';
+var VER='4.0', LSKEY='guestup_smena_v1', MEKEY='guestup_smena_staff', API='/api/smena';
 
 /* ---------- СХЕМА БЛОКОВ ПЕРЕДАЧИ ---------- */
 var BLOCKS=[
@@ -260,6 +279,7 @@ var BLOCKS=[
 {id:'guestcase',ic:'🙋',ph:1,t:'Гости вечера',
  hint:'Обещание гостю и аллергия — две вещи, которые нельзя потерять на пересменке. Пишите так, чтобы принимающий закрыл вопрос без вас.',
  mk:{owner:'owner',due:'',text:function(it){return (it.kind||'Гость')+': '+[it.who,it.what].filter(Boolean).join(' — ')}},
+ mg:1,
  item:[{k:'kind',ty:'sel',l:'Что',o:['Обещание гостю','Аллергия / диета','VIP или постоянный гость','Повод: годовщина, ДР','Жалоба','Комплимент','Забытая вещь']},
        {k:'who',ty:'txt',l:'Гость / стол / телефон'},
        {k:'what',ty:'area',l:'Суть, предпочтения, что именно обещано'},
@@ -382,9 +402,22 @@ function micStart(id){
 }
 
 /* ---------- СОСТОЯНИЕ ---------- */
-var S={rev:0,place:'Ресторан',shifts:[],tasks:[]};
-var me=localStorage.getItem(MEKEY)||'';
+var S={rev:0,place:'Ресторан',sheet:'',staff:[],guests:[],shifts:[],tasks:[]};
+var meId=localStorage.getItem(MEKEY)||'', me='';
+var loginPick=null, loginErr='';
 var view='home', cur=null, opened={}, cloudOK=false, savedAt='';
+
+/* ---------- СОТРУДНИКИ И ВХОД ---------- */
+/* PIN разделяет ответственность между своими: видно, кто именно подписал приём смены.
+   Это не защита от постороннего — для неё ставится Cloudflare Access на проект. */
+function hashPin(p){var h=5381,x=String(p);for(var i=0;i<x.length;i++)h=((h<<5)+h+x.charCodeAt(i))>>>0;return 'h'+h.toString(36)}
+function staffById(id){var r=null;(S.staff||[]).forEach(function(x){if(x.id===id)r=x});return r}
+function currentStaff(){return staffById(meId)}
+function setMe(st){
+  if(!st){meId='';me='';localStorage.removeItem(MEKEY);return}
+  meId=st.id;me=st.name;localStorage.setItem(MEKEY,meId);
+}
+function isBoss(){var st=currentStaff();return !!st&&st.role==='Управляющий'}
 
 /* ---------- УТИЛИТЫ ---------- */
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
@@ -402,8 +435,10 @@ function shiftById(id){for(var i=0;i<S.shifts.length;i++)if(S.shifts[i].id===id)
 function partName(p){return p==='night'?'Вечер / закрытие':'Утро / открытие'}
 
 /* ---------- ХРАНЕНИЕ ---------- */
+function norm(){S.staff=S.staff||[];S.guests=S.guests||[];S.tasks=S.tasks||[];S.shifts=S.shifts||[];
+  var st=currentStaff();me=st?st.name:'';}
 function saveLocal(){try{localStorage.setItem(LSKEY,JSON.stringify(S))}catch(e){}}
-function loadLocal(){try{var r=localStorage.getItem(LSKEY);if(r){var o=JSON.parse(r);if(o&&o.shifts)S=o}}catch(e){}}
+function loadLocal(){try{var r=localStorage.getItem(LSKEY);if(r){var o=JSON.parse(r);if(o&&o.shifts)S=o}}catch(e){}norm()}
 
 var _t=null;
 function touch(re){saveLocal();if(re!==false)render();clearTimeout(_t);_t=setTimeout(saveCloud,1600)}
@@ -411,14 +446,15 @@ function touch(re){saveLocal();if(re!==false)render();clearTimeout(_t);_t=setTim
 function loadCloud(){
   return fetch(API,{cache:'no-store'}).then(function(r){if(!r.ok)throw 0;return r.json()}).then(function(j){
     cloudOK=true;
-    if(j&&j.state&&j.state.shifts){S=j.state;S.rev=j.rev||0;saveLocal()}
+    if(j&&j.state&&j.state.shifts){S=j.state;S.rev=j.rev||0;norm();saveLocal()}
     else{S.rev=j&&j.rev||0}
     savedAt=j&&j.at?hhmm(j.at):'';cloudStatus();render();
   }).catch(function(){cloudOK=false;cloudStatus()});
 }
 function saveCloud(force){
   if(!cloudOK)return Promise.resolve();
-  var body={rev:S.rev,state:{place:S.place,sheet:S.sheet||'',shifts:S.shifts,tasks:S.tasks},force:!!force};
+  var body={rev:S.rev,state:{place:S.place,sheet:S.sheet||'',staff:S.staff,guests:S.guests,
+    shifts:S.shifts,tasks:S.tasks},force:!!force};
   return fetch(API,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
    .then(function(r){
      if(r.status===409){
@@ -433,8 +469,8 @@ function saveCloud(force){
 }
 function cloudStatus(){
   var e=document.getElementById('cloud');
-  e.innerHTML=cloudOK?('<b>Облако</b>'+(savedAt?'сохранено '+savedAt:'подключено'))
-                     :('<b>Только этот телефон</b>облако недоступно');
+  var who=me?('<b>'+esc(me)+'</b>'):'<b>Не вошли</b>';
+  e.innerHTML=who+(cloudOK?(savedAt?'сохранено '+savedAt:'облако'):'только этот телефон');
 }
 
 /* ---------- ЗАДАЧИ ---------- */
@@ -538,6 +574,10 @@ function blockHTML(sh,b,mode){
         body+=it.__task?'<div class="note" style="margin-top:2px;color:var(--green)">✓ Задача создана — она в переходящем списке</div>'
                        :'<button class="btn ghost sm" data-a="mktask:'+b.id+':'+i+'">→ Сделать задачей</button>';
       }
+      if(b.mg&&!ro){
+        body+=it.__guest?'<div class="note" style="margin-top:2px;color:var(--green)">✓ Гость в книге — карточка пополнена</div>'
+                        :'<button class="btn ghost sm" data-a="mkguest:'+i+'" style="margin-left:8px">→ В книгу гостей</button>';
+      }
       body+='</div>';
     });
     if(!ro)body+='<button class="add" data-a="add:'+b.id+'">+ добавить</button>';
@@ -617,7 +657,10 @@ function viewShift(){
   if(mode==='edit'){
     h+='<div class="card-s">Заполняйте по блокам. Всё сохраняется само.</div>'+
        '<div class="row2"><div class="f"><label>Сдаёт</label><input type="text" data-h="from" value="'+esc(sh.from)+'"></div>'+
-       '<div class="f"><label>Принимает *</label><input type="text" data-h="to" value="'+esc(sh.to)+'"></div></div>';
+       '<div class="f"><label>Принимает *</label><select data-h="to"><option value="">—</option>'+
+       S.staff.filter(function(x){return x.id!==sh.fromId}).map(function(x){
+         return '<option'+(sh.to===x.name?' selected':'')+'>'+esc(x.name)+'</option>'}).join('')+
+       '</select></div></div>';
     var fb=0;BLOCKS.forEach(function(b){if(filled(sh,b))fb++});
     h+='<div class="pg"><i style="width:'+Math.round(fb/BLOCKS.length*100)+'%"></i></div>'+
        '<div class="card-s" style="margin:7px 0 0">Заполнено '+fb+' из '+BLOCKS.length+' блоков</div>';
@@ -653,6 +696,34 @@ function barShift(){
   return '';
 }
 
+/* ---------- ЭКРАН: ВХОД ---------- */
+function viewLogin(){
+  var h='';
+  if(loginErr)h+='<div class="err">'+esc(loginErr)+'</div>';
+  if(!S.staff.length){
+    h+='<div class="card accent"><div class="card-h">Первый вход</div>'+
+      '<div class="card-s">Создайте себя как управляющего. Дальше добавите остальных менеджеров во вкладке «Отчёт».</div>'+
+      '<div class="f"><label>Имя</label><input type="text" id="lg-name" placeholder="Как вас зовут"></div>'+
+      '<div class="f"><label>PIN — четыре цифры</label><input class="pin" type="password" inputmode="numeric" maxlength="6" id="lg-pin"></div>'+
+      '<div class="f"><label>Повторите PIN</label><input class="pin" type="password" inputmode="numeric" maxlength="6" id="lg-pin2"></div>'+
+      '<button class="btn" data-a="first">Создать и войти</button></div>';
+    return h;
+  }
+  if(!loginPick){
+    h+='<div class="card"><div class="card-h">Кто на смене</div>'+
+       '<div class="card-s">Выберите себя и введите PIN. Под вашим именем будет стоять подпись под приёмом смены.</div><div class="who">';
+    S.staff.forEach(function(x){h+='<button data-a="pick:'+x.id+'">'+esc(x.name)+'</button>'});
+    return h+'</div></div>';
+  }
+  var st=staffById(loginPick);
+  h+='<div class="card accent"><div class="card-h">'+esc(st?st.name:'')+'</div>'+
+     '<div class="card-s">Введите PIN</div>'+
+     '<input class="pin" type="password" inputmode="numeric" maxlength="6" id="lg-pin" autofocus>'+
+     '<div class="btns"><button class="btn ghost" data-a="pickback">Назад</button>'+
+     '<button class="btn" data-a="login">Войти</button></div></div>';
+  return h;
+}
+
 /* ---------- ЭКРАН: ГЛАВНАЯ ---------- */
 function viewHome(){
   var act=S.shifts.filter(function(s){return s.status!=='accepted'});
@@ -672,8 +743,8 @@ function viewHome(){
       '<div class="card-s">Смена передаётся по блокам. Принимающий подтверждает каждый — как в отеле и на производстве.</div>'+
       '<div class="row2"><div class="f"><label>Дата</label><input type="date" id="ns-date" value="'+today()+'"></div>'+
       '<div class="f"><label>Смена</label><select id="ns-part"><option value="day"'+(hnow<15?' selected':'')+'>Утро / открытие</option><option value="night"'+(hnow>=15?' selected':'')+'>Вечер / закрытие</option></select></div></div>'+
-      '<div class="f"><label>Кто сдаёт</label><input type="text" id="ns-from" value="'+esc(me)+'" placeholder="Имя менеджера"></div>'+
-      '<button class="btn" data-a="new">Начать</button></div>';
+      '<div class="note">Сдаёт: '+esc(me)+'</div>'+
+      '<button class="btn" data-a="new" style="margin-top:12px">Начать</button></div>';
   }
 
   var hot=openTasks().filter(function(t){return t.carried>=2}).slice(0,5);
@@ -714,6 +785,73 @@ function viewTasks(){
      '<div class="row2"><div class="f"><label>Ответственный</label><input type="text" id="nt-own" value="'+esc(me)+'"></div>'+
      '<div class="f"><label>Срок</label><input type="text" id="nt-due" placeholder="завтра до 12:00"></div></div>'+
      '<button class="btn ghost sm" data-a="tadd">+ Добавить</button></div></div>';
+  return h;
+}
+
+/* ---------- ЭКРАН: КНИГА ГОСТЕЙ ---------- */
+var gq='', gOpen={};
+function cut(t,n){t=String(t||'');if(t.length<=n)return t;
+  var c=t.slice(0,n), i=c.lastIndexOf(' ');
+  return (i>20?c.slice(0,i):c).replace(/[\s,;.:-]+$/,'')+'…';}
+function guestById(id){var r=null;S.guests.forEach(function(x){if(x.id===id)r=x});return r}
+function findGuest(name,phone){
+  var n=String(name||'').trim().toLowerCase(), ph=String(phone||'').replace(/\D/g,'');
+  var r=null;
+  S.guests.forEach(function(g){
+    if(ph&&ph.length>6&&String(g.phone||'').replace(/\D/g,'')===ph)r=g;
+    else if(!r&&n&&n.length>2&&String(g.name||'').trim().toLowerCase()===n)r=g;
+  });
+  return r;
+}
+var GF=[{k:'name',l:'Имя'},{k:'phone',l:'Телефон'},{k:'table',l:'Любимый стол'},
+        {k:'prefs',l:'Предпочтения: вино, посадка, темп подачи',a:1},
+        {k:'allergy',l:'Аллергии и диеты',a:1},
+        {k:'note',l:'Что важно знать',a:1}];
+function guestHTML(g){
+  var op=gOpen[g.id], v=g.visits||[];
+  var h='<div class="blk'+(op?' open':'')+'"><div class="blk-h" data-a="gtog:'+g.id+'">'+
+    '<div class="blk-ic">'+(g.allergy?'⚠️':'👤')+'</div>'+
+    '<div class="blk-t">'+esc(g.name||'Без имени')+
+    (g.allergy?'<div style="font-size:11px;color:var(--red);margin-top:2px">'+esc(g.allergy)+'</div>':
+      (g.prefs?'<div style="font-size:11px;color:var(--muted);margin-top:2px">'+esc(cut(g.prefs,58))+'</div>':''))+
+    '</div><div class="blk-n">'+v.length+'</div><div class="blk-ar">▸</div></div><div class="blk-b">';
+  GF.forEach(function(f){
+    var val=g[f.k]==null?'':g[f.k];
+    var at='data-g="'+g.id+'" data-k="'+f.k+'"';
+    h+='<div class="f"><label>'+esc(f.l)+'</label>'+
+       (f.a?ta('g-'+g.id+'-'+f.k,at,val):'<input type="text" '+at+' value="'+esc(val)+'">')+'</div>';
+  });
+  h+='<div class="tsep">Визиты — '+v.length+'</div>';
+  if(!v.length)h+='<div class="empty">Пока ни одного визита из смен</div>';
+  v.slice().reverse().forEach(function(x){
+    h+='<div class="le"><div class="le-t">'+rus(x.date||'')+'</div><div class="le-b">'+
+       '<div class="le-x">'+esc(x.what||'')+'</div>'+
+       '<div class="le-w">'+esc(x.kind||'')+(x.by?' · '+esc(x.by):'')+'</div></div></div>';
+  });
+  h+='<div class="btns"><button class="btn ghost sm" data-a="gdel:'+g.id+'">Удалить гостя</button></div>';
+  return h+'</div></div>';
+}
+function viewGuests(){
+  var list=S.guests.slice();
+  if(gq.trim()){
+    var q2=gq.toLowerCase();
+    list=list.filter(function(g){return JSON.stringify(g).toLowerCase().indexOf(q2)>=0});
+  }
+  list.sort(function(a,b){return (b.visits||[]).length-(a.visits||[]).length});
+  var h='<input class="search" id="gq" placeholder="Поиск: имя, телефон, предпочтения…" value="'+esc(gq)+'">';
+  h+='<div class="card"><div class="card-h">Книга гостей</div>'+
+     '<div class="card-s">Карточка накапливается из смен: в блоке «Гости вечера» нажмите «В книгу гостей» — визит и предпочтения лягут сюда.</div>'+
+     '<div class="kpi" style="margin-bottom:4px">'+
+     k(S.guests.length,'гостей в книге')+
+     k(S.guests.filter(function(g){return g.allergy}).length,'с аллергией или диетой',
+       S.guests.filter(function(g){return g.allergy}).length?'bad':'')+
+     '</div></div>';
+  if(!list.length)h+='<div class="card"><div class="empty">'+(gq?'Никого не нашли':'Книга пуста')+'</div></div>';
+  list.forEach(function(g){h+=guestHTML(g)});
+  h+='<div class="card"><div class="card-h">Новый гость</div>'+
+     '<div class="row2"><div class="f"><label>Имя</label><input type="text" id="ng-name"></div>'+
+     '<div class="f"><label>Телефон</label><input type="text" id="ng-phone"></div></div>'+
+     '<button class="btn ghost sm" data-a="gadd">+ Добавить в книгу</button></div>';
   return h;
 }
 
@@ -869,6 +1007,23 @@ function viewRep(){
      '<div class="btns"><button class="btn ghost" data-a="excopy2">Скопировать таблицу</button>'+
      '<button class="btn ghost" data-a="excsv">Скачать CSV</button></div></div>';
 
+  h+='<div class="card"><div class="card-h">Сотрудники</div>'+
+     '<div class="card-s">Под этими именами стоят подписи в приёме смены. PIN разделяет ответственность между своими; от постороннего защищает Cloudflare Access на проекте.</div>';
+  S.staff.forEach(function(x){
+    h+='<div class="st-row"><div class="st-n">'+esc(x.name)+(x.id===meId?' · вы':'')+
+       '<span>'+esc(x.role)+'</span></div>'+
+       '<button class="btn ghost sm" data-a="staffpin:'+x.id+'">Сменить PIN</button>'+
+       (isBoss()&&x.id!==meId?'<button class="btn ghost sm" data-a="staffdel:'+x.id+'">×</button>':'')+'</div>';
+  });
+  if(isBoss()){
+    h+='<div style="margin-top:14px"><div class="row2">'+
+       '<div class="f"><label>Имя</label><input type="text" id="sa-name"></div>'+
+       '<div class="f"><label>PIN</label><input type="text" inputmode="numeric" maxlength="6" id="sa-pin"></div></div>'+
+       '<div class="f"><label>Роль</label><select id="sa-role"><option>Менеджер</option><option>Управляющий</option></select></div>'+
+       '<button class="btn ghost sm" data-a="staffadd">+ Добавить сотрудника</button></div>';
+  }
+  h+='</div>';
+
   h+='<div class="card"><div class="card-h">Автовыгрузка в Google Таблицу</div>'+
      '<div class="card-s">Вставьте ссылку веб-приложения Apps Script — строка будет уходить в таблицу сама, каждый раз при приёме смены.</div>'+
      '<div class="f"><label>Ссылка</label><input type="text" data-set="sheet" value="'+esc(S.sheet||'')+'" placeholder="https://script.google.com/macros/s/…/exec"></div>'+
@@ -899,7 +1054,16 @@ function render(){
   document.getElementById('place').innerHTML=esc(S.place)+' · <span id="ver">v'+VER+'</span>';
   document.querySelectorAll('.tab').forEach(function(t){t.classList.toggle('on',t.dataset.v===view||(view==='shift'&&t.dataset.v==='home'))});
   var v=document.getElementById('view');
-  v.innerHTML=view==='shift'?viewShift():view==='tasks'?viewTasks():view==='rep'?viewRep():view==='arch'?viewArch():viewHome();
+  var tabs=document.querySelector('.tabs'), bar0=document.getElementById('bar');
+  if(!currentStaff()){
+    tabs.style.display='none';bar0.style.display='none';
+    v.innerHTML=viewLogin();
+    var pf=document.getElementById('lg-pin');if(pf&&loginPick)pf.focus();
+    window.scrollTo(0,0);return;
+  }
+  tabs.style.display='';
+  v.innerHTML=view==='shift'?viewShift():view==='guests'?viewGuests():view==='tasks'?viewTasks():
+              view==='rep'?viewRep():view==='arch'?viewArch():viewHome();
   var bar=document.getElementById('bar'), bi=document.getElementById('barin');
   var b=view==='shift'?barShift():'';
   bi.innerHTML=b; bar.style.display=b?'block':'none';
@@ -933,17 +1097,62 @@ function pickPhoto(bid){
 }
 
 /* ---------- СОБЫТИЯ ---------- */
-function whoAmI(def){
-  var n=prompt('Ваше имя (менеджер):',def||me||'');
-  if(n&&n.trim()){me=n.trim();localStorage.setItem(MEKEY,me);return me}
-  return '';
-}
+function whoAmI(){return me}
 
 document.addEventListener('click',function(e){
   var t=e.target.closest('[data-a]');
   if(!t)return;
   var p=t.dataset.a.split(':'), a=p[0], a1=p[1], a2=p[2];
   var sh=cur?shiftById(cur):null;
+
+  if(a==='first'){
+    var nm=(document.getElementById('lg-name').value||'').trim();
+    var p1=document.getElementById('lg-pin').value, p2=document.getElementById('lg-pin2').value;
+    loginErr='';
+    if(nm.length<2)loginErr='Впишите имя';
+    else if(!/^\d{4,6}$/.test(p1))loginErr='PIN — от четырёх до шести цифр';
+    else if(p1!==p2)loginErr='PIN не совпал, введите ещё раз';
+    if(loginErr)return render();
+    var st={id:uid(),name:nm,pin:hashPin(p1),role:'Управляющий',createdAt:Date.now()};
+    S.staff.push(st);setMe(st);cloudStatus();return touch();
+  }
+  if(a==='pick'){loginPick=a1;loginErr='';return render()}
+  if(a==='pickback'){loginPick=null;loginErr='';return render()}
+  if(a==='login'){
+    var st2=staffById(loginPick), pv=document.getElementById('lg-pin').value;
+    if(!st2)return;
+    if(st2.pin!==hashPin(pv)){loginErr='Неверный PIN';return render()}
+    setMe(st2);loginPick=null;loginErr='';view='home';cloudStatus();return render();
+  }
+  if(a==='who'){
+    if(!me)return;
+    if(confirm('Выйти из аккаунта «'+me+'»?')){setMe(null);loginPick=null;cloudStatus();render()}
+    return;
+  }
+  if(a==='staffadd'){
+    if(!isBoss()){toast('Добавлять сотрудников может только управляющий');return}
+    var an=(document.getElementById('sa-name').value||'').trim();
+    var ap=document.getElementById('sa-pin').value;
+    if(an.length<2){toast('Впишите имя');return}
+    if(!/^\d{4,6}$/.test(ap)){toast('PIN — от четырёх до шести цифр');return}
+    S.staff.push({id:uid(),name:an,pin:hashPin(ap),role:document.getElementById('sa-role').value,createdAt:Date.now()});
+    toast('Сотрудник добавлен');return touch();
+  }
+  if(a==='staffpin'){
+    var sp=staffById(a1);if(!sp)return;
+    if(!isBoss()&&sp.id!==meId){toast('Менять чужой PIN может только управляющий');return}
+    var np=prompt('Новый PIN для «'+sp.name+'» — от четырёх до шести цифр:','');
+    if(np===null)return;
+    if(!/^\d{4,6}$/.test(np)){toast('PIN — от четырёх до шести цифр');return}
+    sp.pin=hashPin(np);toast('PIN изменён');return touch();
+  }
+  if(a==='staffdel'){
+    if(!isBoss()){toast('Удалять сотрудников может только управляющий');return}
+    if(a1===meId){toast('Себя удалить нельзя');return}
+    var sd=staffById(a1);if(!sd)return;
+    if(!confirm('Удалить «'+sd.name+'»? Подписи под прошлыми сменами останутся.'))return;
+    S.staff=S.staff.filter(function(x){return x.id!==a1});return touch();
+  }
 
   if(a==='tog'){opened[a1]=!opened[a1];return render()}
   if(a==='back'){view='home';cur=null;errs=[];return render()}
@@ -956,11 +1165,8 @@ document.addEventListener('click',function(e){
   }
 
   if(a==='new'){
-    var from=(document.getElementById('ns-from').value||'').trim()||whoAmI();
-    if(!from)return;
-    me=from;localStorage.setItem(MEKEY,me);
     var s={id:uid(),date:document.getElementById('ns-date').value||today(),
-           part:document.getElementById('ns-part').value,from:from,to:'',
+           part:document.getElementById('ns-part').value,from:me,fromId:meId,to:'',
            status:'draft',data:{},ack:{},photos:{},createdAt:Date.now()};
     S.shifts.unshift(s);cur=s.id;view='shift';opened={__tasks:true,brief:true,hall:true,log:true};
     return touch();
@@ -989,6 +1195,39 @@ document.addEventListener('click',function(e){
   if(a==='logdel'){
     if(!confirm('Удалить запись из журнала?'))return;
     D(sh,'log').__log.splice(+a1,1);return touch();
+  }
+  if(a==='gtog'){gOpen[a1]=!gOpen[a1];return render()}
+  if(a==='gadd'){
+    var gn=(document.getElementById('ng-name').value||'').trim();
+    if(gn.length<2){toast('Впишите имя гостя');return}
+    S.guests.unshift({id:uid(),name:gn,phone:(document.getElementById('ng-phone').value||'').trim(),
+      table:'',prefs:'',allergy:'',note:'',visits:[],createdAt:Date.now()});
+    toast('Гость добавлен');return touch();
+  }
+  if(a==='gdel'){
+    var gg=guestById(a1);if(!gg)return;
+    if(!confirm('Удалить «'+(gg.name||'гостя')+'» из книги? История визитов пропадёт.'))return;
+    S.guests=S.guests.filter(function(x){return x.id!==a1});return touch();
+  }
+  if(a==='mkguest'){
+    var gi=L(sh,'guestcase')[+a1];
+    if(!gi)return;
+    var raw=String(gi.who||'').trim();
+    if(raw.length<2){toast('Сначала впишите, кто гость');return}
+    var pm=raw.match(/\+?\d[\d\s\-()]{8,}/);
+    var phone=pm?pm[0].trim():'';
+    var nm=raw.replace(phone,'').replace(/^[\s,;·-]+|[\s,;·-]+$/g,'');
+    var g=findGuest(nm,phone);
+    if(!g){
+      g={id:uid(),name:nm||raw,phone:phone,table:'',prefs:'',allergy:'',note:'',visits:[],createdAt:Date.now()};
+      S.guests.unshift(g);
+    }else if(phone&&!g.phone){g.phone=phone}
+    g.visits=g.visits||[];
+    g.visits.push({at:Date.now(),date:sh.date,shiftId:sh.id,kind:gi.kind||'',what:gi.what||'',by:me});
+    if(gi.kind==='Аллергия / диета'&&gi.what)g.allergy=g.allergy?(g.allergy+'; '+gi.what):gi.what;
+    if(gi.kind==='VIP или постоянный гость'&&gi.what)g.prefs=g.prefs?(g.prefs+'; '+gi.what):gi.what;
+    gi.__guest=g.id;
+    toast('Карточка гостя пополнена');return touch();
   }
   if(a==='mktask'){
     var mb=blk(a1), it=L(sh,a1)[+a2];
@@ -1033,7 +1272,7 @@ document.addEventListener('click',function(e){
     return;
   }
   if(a==='ack'){
-    if(!me&&!whoAmI(sh.to))return;
+    if(!me)return;
     if(!sh.ack)sh.ack={};
     sh.ack[a1]={by:me,at:Date.now()};
     return touch();
@@ -1043,8 +1282,8 @@ document.addEventListener('click',function(e){
     sh.status='draft';sh.ack={};return touch();
   }
   if(a==='accept'){
-    var n=whoAmI(sh.to);if(!n)return;
-    sh.status='accepted';sh.acceptedAt=Date.now();sh.acceptedBy=n;
+    if(!me)return;
+    sh.status='accepted';sh.acceptedAt=Date.now();sh.acceptedBy=me;sh.acceptedById=meId;
     openTasks().forEach(function(x){x.carried=(x.carried||0)+1});
     if(S.sheet)toSheet(tableRows([sh]),true);
     view='home';cur=null;touch();saveCloud();
@@ -1074,6 +1313,8 @@ document.addEventListener('click',function(e){
 document.addEventListener('input',function(e){
   var el=e.target;
   if(el.id==='q'){q=el.value;clearTimeout(window._q);window._q=setTimeout(render,250);return}
+  if(el.id==='gq'){gq=el.value;clearTimeout(window._gq);window._gq=setTimeout(render,250);return}
+  if(el.dataset.g){var gx=guestById(el.dataset.g);if(gx){gx[el.dataset.k]=el.value;touch(false)}return}
   var sh=cur?shiftById(cur):null;
   if(el.dataset.set){S[el.dataset.set]=el.value;return touch(false)}
   if(el.dataset.h&&sh){sh[el.dataset.h]=el.value;return touch(false)}
@@ -1097,6 +1338,11 @@ document.getElementById('place').addEventListener('click',function(){
 });
 
 /* ---------- СТАРТ ---------- */
+if('serviceWorker' in navigator){
+  window.addEventListener('load',function(){
+    navigator.serviceWorker.register('sw.js').catch(function(){});
+  });
+}
 loadLocal();
 opened={__tasks:true};
 cloudStatus();
