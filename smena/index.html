@@ -88,6 +88,10 @@ h1 em{font-style:italic;color:var(--gold)}
 .task-t{font-size:14px;line-height:1.4;word-wrap:break-word}
 .task-m{font-size:11px;color:var(--muted);margin-top:3px}
 .task.hot .task-t{color:var(--red)}
+.task.done .task-t{text-decoration:line-through;color:var(--muted)}
+.task.done .task-m{color:var(--green)}
+.task.done .chk input:checked{background:var(--green);border-color:var(--green)}
+.tsep{font-size:10.5px;color:var(--muted);letter-spacing:.07em;text-transform:uppercase;margin:18px 0 2px;padding-top:13px;border-top:1px solid var(--border)}
 .pill{display:inline-block;font-size:10px;letter-spacing:.05em;text-transform:uppercase;padding:2px 7px;border-radius:20px;background:var(--dark3);color:var(--muted);margin-left:6px}
 .pill.hot{background:rgba(217,88,75,.15);color:var(--red)}
 
@@ -202,7 +206,7 @@ table.t td.bad{color:var(--red)}
     <div class="cloud" id="cloud"><b>—</b>локально</div>
   </div>
   <h1>Передача <em>смены</em></h1>
-  <div class="sub" id="place">Ресторан · <span id="ver">v3.0</span></div>
+  <div class="sub" id="place">Ресторан · <span id="ver">v3.1</span></div>
   <div class="tabs">
     <button class="tab on" data-v="home">Сейчас</button>
     <button class="tab" data-v="tasks">Задачи</button>
@@ -219,7 +223,7 @@ table.t td.bad{color:var(--red)}
    Хранение: KV на сервере (побеждает) → localStorage → пусто.
    Правка схемы блоков — только в BLOCKS ниже.
    ============================================================ */
-var VER='3.0', LSKEY='guestup_smena_v1', MEKEY='guestup_smena_me', API='/api/smena';
+var VER='3.1', LSKEY='guestup_smena_v1', MEKEY='guestup_smena_me', API='/api/smena';
 
 /* ---------- СХЕМА БЛОКОВ ПЕРЕДАЧИ ---------- */
 var BLOCKS=[
@@ -255,6 +259,7 @@ var BLOCKS=[
 
 {id:'guestcase',ic:'🙋',ph:1,t:'Гости вечера',
  hint:'Обещание гостю и аллергия — две вещи, которые нельзя потерять на пересменке. Пишите так, чтобы принимающий закрыл вопрос без вас.',
+ mk:{owner:'owner',due:'',text:function(it){return (it.kind||'Гость')+': '+[it.who,it.what].filter(Boolean).join(' — ')}},
  item:[{k:'kind',ty:'sel',l:'Что',o:['Обещание гостю','Аллергия / диета','VIP или постоянный гость','Повод: годовщина, ДР','Жалоба','Комплимент','Забытая вещь']},
        {k:'who',ty:'txt',l:'Гость / стол / телефон'},
        {k:'what',ty:'area',l:'Суть, предпочтения, что именно обещано'},
@@ -295,12 +300,14 @@ var BLOCKS=[
 
 {id:'purchase',ic:'📦',t:'Закупка и склад',
  hint:'«Я думал, ты заказал» — вторая по частоте потеря на пересменке.',
+ mk:{owner:'owner',due:'when',text:function(it){return 'Закупка: '+(it.what||'')+(it.supplier?' ('+it.supplier+')':'')}},
  fields:[{k:'critical',ty:'area',l:'Критические остатки'}],
  item:[{k:'what',ty:'txt',l:'Что'},{k:'supplier',ty:'txt',l:'Поставщик'},
        {k:'status',ty:'sel',l:'Статус',o:['Заказано','Не приехало','Горит','Принято','Нужно заказать']},
        {k:'when',ty:'txt',l:'Когда ждём'},{k:'owner',ty:'txt',l:'Кто принимает'}]},
 
 {id:'tech',ic:'🔧',ph:1,t:'Техника и здание',
+ mk:{owner:'',due:'deadline',text:function(it){return 'Техника: '+[it.what,it.where].filter(Boolean).join(', ')+(it.action?' — '+it.action:'')}},
  item:[{k:'what',ty:'txt',l:'Что не работает'},{k:'where',ty:'txt',l:'Где'},
        {k:'level',ty:'sel',l:'Насколько',o:['Работает с оговоркой','Ограниченно','Стоит полностью']},
        {k:'action',ty:'area',l:'Что сделано, кто вызван'},
@@ -440,20 +447,20 @@ function addTask(text,owner,due,from){
 var openC={};
 function when(ts){var d=new Date(ts);return d.getDate()+' '+MON[d.getMonth()]+', '+hhmm(ts)}
 function taskHTML(t){
-  var hot=t.carried>=3, cm=t.comments||[];
-  var h='<div class="task'+(hot?' hot':'')+'">'+
-    '<label class="chk" style="padding:0"><input type="checkbox" data-a="tdone:'+t.id+'"></label>'+
-    '<div class="task-b"><div class="task-t">'+esc(t.text)+'</div>'+
-    '<div class="task-m">'+(t.owner?esc(t.owner):'без ответственного')+
-    (t.due?' · до '+esc(t.due):'')+
-    (t.carried?'<span class="pill'+(hot?' hot':'')+'">висит '+t.carried+' смен</span>':'')+'</div>';
-  if(cm.length||openC[t.id]){
-    h+='<div class="tc">';
-    cm.forEach(function(c){h+='<div class="tc-i"><b>'+esc(c.by)+' · '+when(c.at)+'</b><br>'+esc(c.text)+'</div>'});
-    if(openC[t.id])h+='<div class="tc-f"><input type="text" id="cm-'+t.id+'" placeholder="Что сделано или почему стоит"><button data-a="cadd:'+t.id+'">→</button></div>';
-    h+='</div>';
+  var hot=!t.done&&t.carried>=3, cm=t.comments||[];
+  var h='<div class="task'+(hot?' hot':'')+(t.done?' done':'')+'">'+
+    '<label class="chk" style="padding:0"><input type="checkbox" data-a="tdone:'+t.id+'"'+(t.done?' checked':'')+'></label>'+
+    '<div class="task-b"><div class="task-t">'+esc(t.text)+'</div><div class="task-m">';
+  if(t.done){
+    h+='выполнил '+esc(t.doneBy||'—')+' · '+when(t.doneAt);
+  }else{
+    h+=(t.owner?esc(t.owner):'без ответственного')+(t.due?' · до '+esc(t.due):'')+
+       (t.carried?'<span class="pill'+(hot?' hot':'')+'">висит '+t.carried+' смен</span>':'');
   }
-  h+='<button class="tc-b" data-a="copen:'+t.id+'">'+(openC[t.id]?'свернуть':(cm.length?'+ ещё комментарий':'+ комментарий'))+'</button>';
+  h+='</div><div class="tc">';
+  cm.forEach(function(c){h+='<div class="tc-i"><b>'+esc(c.by)+' · '+when(c.at)+'</b><br>'+esc(c.text)+'</div>'});
+  h+='<div class="tc-f"><input type="text" id="cm-'+t.id+'" placeholder="Комментарий: что сделано или почему стоит">'+
+     '<button data-a="cadd:'+t.id+'">→</button></div></div>';
   return h+'</div></div>';
 }
 
@@ -527,6 +534,10 @@ function blockHTML(sh,b,mode){
     list.forEach(function(it,i){
       body+='<div class="item">'+(ro?'':'<button class="item-x" data-a="del:'+b.id+':'+i+'">×</button>');
       b.item.forEach(function(f){body+=field(f,sh,b.id,i,ro)});
+      if(b.mk&&!ro){
+        body+=it.__task?'<div class="note" style="margin-top:2px;color:var(--green)">✓ Задача создана — она в переходящем списке</div>'
+                       :'<button class="btn ghost sm" data-a="mktask:'+b.id+':'+i+'">→ Сделать задачей</button>';
+      }
       body+='</div>';
     });
     if(!ro)body+='<button class="add" data-a="add:'+b.id+'">+ добавить</button>';
@@ -565,8 +576,13 @@ function tasksHTML(mode){
     (o.length?'<div class="blk-n'+(o.some(function(t){return t.carried>=3})?' bad':'')+'">'+o.length+'</div>':'')+
     '<div class="blk-ar">▸</div></div><div class="blk-b">';
   h+='<div class="hint">Незакрытая задача переходит в следующую смену и считает, сколько смен она висит.</div>';
-  if(!o.length)h+='<div class="empty">Открытых задач нет</div>';
+  var doneHere=S.tasks.filter(function(t){return t.done&&t.doneShift===cur});
+  if(!o.length&&!doneHere.length)h+='<div class="empty">Открытых задач нет</div>';
   o.forEach(function(t){h+=taskHTML(t)});
+  if(doneHere.length){
+    h+='<div class="tsep">Выполнено в эту смену — '+doneHere.length+'</div>';
+    doneHere.forEach(function(t){h+=taskHTML(t)});
+  }
   if(mode==='edit'){
     h+='<div style="margin-top:14px"><div class="f"><label>Новая задача</label><input type="text" id="nt-text" placeholder="Что нужно сделать"></div>'+
        '<div class="row2"><div class="f"><label>Ответственный</label><input type="text" id="nt-own" value="'+esc(me)+'"></div>'+
@@ -682,19 +698,22 @@ function shiftRow(s){
 
 /* ---------- ЭКРАН: ЗАДАЧИ ---------- */
 function viewTasks(){
-  var o=openTasks(), c=S.tasks.filter(function(t){return t.done}).slice(0,15);
-  var h='<div class="card"><div class="card-h">Открытые задачи</div><div class="card-s">Переходят из смены в смену, пока не закрыты.</div>';
-  if(!o.length)h+='<div class="empty">Пусто. Хороший знак.</div>';
-  o.sort(function(a,b){return (b.carried||0)-(a.carried||0)}).forEach(function(t){h+=taskHTML(t)});
-  h+='<div style="margin-top:14px"><div class="f"><label>Новая задача</label><input type="text" id="nt-text" placeholder="Что нужно сделать"></div>'+
+  var o=openTasks().sort(function(a,b){return (b.carried||0)-(a.carried||0)});
+  var week=Date.now()-7*86400000;
+  var c=S.tasks.filter(function(t){return t.done&&(t.doneAt||0)>=week})
+               .sort(function(a,b){return (b.doneAt||0)-(a.doneAt||0)});
+  var h='<div class="card"><div class="card-h">Задачи</div>'+
+        '<div class="card-s">Открытые переходят из смены в смену. Выполненные остаются здесь неделю — зачёркнутыми, чтобы было видно, что сделано.</div>';
+  if(!o.length&&!c.length)h+='<div class="empty">Пусто. Хороший знак.</div>';
+  o.forEach(function(t){h+=taskHTML(t)});
+  if(c.length){
+    h+='<div class="tsep">Выполнено за последние 7 дней — '+c.length+'</div>';
+    c.forEach(function(t){h+=taskHTML(t)});
+  }
+  h+='<div style="margin-top:16px"><div class="f"><label>Новая задача</label><input type="text" id="nt-text" placeholder="Что нужно сделать"></div>'+
      '<div class="row2"><div class="f"><label>Ответственный</label><input type="text" id="nt-own" value="'+esc(me)+'"></div>'+
      '<div class="f"><label>Срок</label><input type="text" id="nt-due" placeholder="завтра до 12:00"></div></div>'+
      '<button class="btn ghost sm" data-a="tadd">+ Добавить</button></div></div>';
-  if(c.length){
-    h+='<div class="card"><div class="card-h">Закрытые</div><div style="margin-top:6px">';
-    c.forEach(function(t){h+='<div class="task"><div class="task-b"><div class="task-t" style="color:var(--muted);text-decoration:line-through">'+esc(t.text)+'</div><div class="task-m">закрыл '+esc(t.doneBy||'—')+'</div></div></div>'});
-    h+='</div></div>';
-  }
   return h;
 }
 
@@ -799,14 +818,15 @@ function viewRep(){
 
   var KA=list.map(shiftKPI);
   function sum(f){return KA.reduce(function(a,x){return a+(+x[f]||0)},0)}
-  var hallAvg=avg(K.map(function(x){return x.hallPct}));
-  var closeAvg=avg(K.map(function(x){return x.closePct}));
-  var fullAvg=avg(K.map(function(x){return x.blocksPct}));
+  var hallAvg=avg(KA.map(function(x){return x.hallPct}));
+  var closeAvg=avg(KA.map(function(x){return x.closePct}));
+  var fullAvg=avg(KA.map(function(x){return x.blocksPct}));
+  var briefAll=KA.length?Math.round(KA.filter(function(x){return x.brief==='да'}).length/KA.length*100):0;
 
   h+='<div class="card"><div class="card-h">Стандарт</div>'+
-     '<div class="card-s">Принято смен за период: '+acc.length+'. В fine dining норма по всем четырём — сто процентов.</div><div class="kpi">'+
+     '<div class="card-s">Смен за период: '+list.length+', из них принято '+acc.length+'. В fine dining норма по всем четырём — сто процентов.</div><div class="kpi">'+
     k(hallAvg+'%','готовность зала до открытия',hallAvg>=95?'good':'bad')+
-    k(briefPct+'%','брифинг проведён',briefPct>=95?'good':'bad')+
+    k(briefAll+'%','брифинг проведён',briefAll>=95?'good':'bad')+
     k(closeAvg+'%','чек-лист закрытия',closeAvg>=95?'good':'bad')+
     k(fullAvg+'%','полнота передачи',fullAvg>=80?'good':'bad')+
     '</div></div>';
@@ -970,7 +990,18 @@ document.addEventListener('click',function(e){
     if(!confirm('Удалить запись из журнала?'))return;
     D(sh,'log').__log.splice(+a1,1);return touch();
   }
-  if(a==='copen'){openC[a1]=!openC[a1];return render()}
+  if(a==='mktask'){
+    var mb=blk(a1), it=L(sh,a1)[+a2];
+    if(!it||!mb||!mb.mk)return;
+    var txt=String(mb.mk.text(it)||'').replace(/\s+/g,' ').trim();
+    if(txt.length<6){toast('Сначала заполните позицию');return}
+    if(txt.length>180)txt=txt.slice(0,177)+'…';
+    var nid=uid();
+    S.tasks.unshift({id:nid,text:txt,owner:(mb.mk.owner?it[mb.mk.owner]:'')||'',
+      due:(mb.mk.due?it[mb.mk.due]:'')||'',from:cur||'',createdAt:Date.now(),carried:0,done:false,comments:[]});
+    it.__task=nid;opened.__tasks=true;toast('Задача создана');
+    return touch();
+  }
   if(a==='cadd'){
     var ci=document.getElementById('cm-'+a1);
     if(!ci||!ci.value.trim()){toast('Напишите комментарий');return}
@@ -980,7 +1011,10 @@ document.addEventListener('click',function(e){
   }
   if(a==='tdone'){
     var task=null;S.tasks.forEach(function(x){if(x.id===a1)task=x});
-    if(task){task.done=true;task.doneAt=Date.now();task.doneBy=me||whoAmI()||'—';task.doneShift=cur||''}
+    if(task){
+      if(task.done){ task.done=false;task.doneAt=0;task.doneBy='';task.doneShift='' }
+      else { task.done=true;task.doneAt=Date.now();task.doneBy=me||whoAmI()||'—';task.doneShift=cur||'' }
+    }
     return touch();
   }
   if(a==='tadd'){
