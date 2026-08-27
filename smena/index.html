@@ -234,7 +234,7 @@ table.t td.n{text-align:center}
     <div class="cloud" id="cloud" data-a="who"><b>—</b>локально</div>
   </div>
   <h1>Передача <em>смены</em></h1>
-  <div class="sub" id="place">Ресторан · <span id="ver">v4.3</span></div>
+  <div class="sub" id="place">Ресторан · <span id="ver">v4.4</span></div>
   <div class="tabs">
     <button class="tab on" data-v="home">Смена</button>
     <button class="tab" data-v="guests">Гости</button>
@@ -252,7 +252,7 @@ table.t td.n{text-align:center}
    Хранение: KV на сервере (побеждает) → localStorage → пусто.
    Правка схемы блоков — только в BLOCKS ниже.
    ============================================================ */
-var VER='4.3', LSKEY='guestup_smena_v1', MEKEY='guestup_smena_staff', API='/api/smena';
+var VER='4.4', LSKEY='guestup_smena_v1', MEKEY='guestup_smena_staff', API='/api/smena';
 
 /* ---------- СХЕМА БЛОКОВ ПЕРЕДАЧИ ---------- */
 var BLOCKS=[
@@ -287,7 +287,8 @@ var BLOCKS=[
  hint:'Записывайте по ходу смены, а не в конце. Каждая запись со временем — потом видно, когда что случилось.'},
 
 {id:'guestcase',ic:'🙋',ph:1,t:'Гости вечера',
- hint:'Обещание гостю и аллергия — две вещи, которые нельзя потерять на пересменке. Пишите так, чтобы принимающий закрыл вопрос без вас.',
+ hint:'Здесь только события этой смены. Полная карточка гостя, история и брони живут в DIOCRM — дублировать их сюда не нужно.',
+ url:{k:'crm',l:'Открыть DIOCRM'},
  mk:{owner:'owner',due:'',text:function(it){return (it.kind||'Гость')+': '+[it.who,it.what].filter(Boolean).join(' — ')}},
  mg:1,
  item:[{k:'kind',ty:'sel',l:'Что',o:['Обещание гостю','Аллергия / диета','VIP или постоянный гость','Повод: годовщина, ДР','Жалоба','Комплимент','Забытая вещь']},
@@ -298,7 +299,8 @@ var BLOCKS=[
 
 {id:'banquets',ic:'🥂',t:'Резервы и банкеты',
  confirm:'Резервы и банкеты на завтра проверены: предоплаты, меню, аллергии, тайминг',
- hint:'Заносите всё на 7 дней вперёд, а не только на сегодня.',
+ hint:'Сами брони живут в DIOCRM. Сюда выносим только то, что требует действия до следующей смены.',
+ url:{k:'crm',l:'Открыть DIOCRM'},
  fields:[{k:'noshow',ty:'num',l:'Не пришли без предупреждения (no-show)'},
          {k:'cancel',ty:'num',l:'Отмены в день брони'}],
  item:[{k:'date',ty:'date',l:'Дата'},{k:'name',ty:'txt',l:'Гость / повод'},
@@ -354,7 +356,7 @@ var BLOCKS=[
 {id:'workly',ic:'🕘',t:'Учёт времени · Workly',
  confirm:'Отметки Face ID проверены — и за эту смену, и за прошлые дни',
  hint:'Кто не отметился по Face ID, тот не попал в табель, а значит и в зарплату. Разбирать в ту же смену, пока все помнят, а не в конце месяца по памяти.',
- url:{k:'workly',l:'Открыть табель Workly'},
+ url:{k:'workly',l:'Открыть бот отчётов'},
  fields:[{k:'all',ty:'chk',l:'Все, кто был на смене, отметились по Face ID на вход и на выход'},
          {k:'past',ty:'chk',l:'Табель за прошлые дни просмотрен, незакрытых хвостов нет'},
          {k:'note',ty:'area',l:'Что в табеле не сходится'}],
@@ -428,7 +430,13 @@ function micStart(id){
 }
 
 /* ---------- СОСТОЯНИЕ ---------- */
-var S={rev:0,place:'Ресторан',sheet:'',staff:[],guests:[],shifts:[],tasks:[]};
+var LINKS={
+  crm:'https://dio-crm-new-version-0425.up.railway.app/',      /* DIOCRM: гости и брони */
+  tasker:'https://avasol-doitok.avaplatforms.com/',            /* doit.ok: задачи */
+  workly:'https://t.me/dio_reports_bot'                        /* бот отчётов, ведёт в Workly */
+};
+var S={rev:0,place:'Ресторан',sheet:'',crm:LINKS.crm,tasker:LINKS.tasker,workly:LINKS.workly,
+       staff:[],guests:[],shifts:[],tasks:[]};
 var meId=localStorage.getItem(MEKEY)||'', me='';
 var loginPick=null, loginErr='';
 var view='home', cur=null, opened={}, cloudOK=false, savedAt='';
@@ -462,6 +470,9 @@ function partName(p){return p==='night'?'Вечер / закрытие':'Утр�
 
 /* ---------- ХРАНЕНИЕ ---------- */
 function norm(){S.staff=S.staff||[];S.guests=S.guests||[];S.tasks=S.tasks||[];S.shifts=S.shifts||[];
+  if(S.crm==null)S.crm=LINKS.crm;
+  if(S.tasker==null)S.tasker=LINKS.tasker;
+  if(S.workly==null)S.workly=LINKS.workly;
   var st=currentStaff();me=st?st.name:'';}
 function saveLocal(){try{localStorage.setItem(LSKEY,JSON.stringify(S))}catch(e){}}
 function loadLocal(){try{var r=localStorage.getItem(LSKEY);if(r){var o=JSON.parse(r);if(o&&o.shifts)S=o}}catch(e){}norm()}
@@ -519,7 +530,10 @@ function taskHTML(t){
     h+=(t.owner?esc(t.owner):'без ответственного')+(t.due?' · до '+esc(t.due):'')+
        (t.carried?'<span class="pill'+(hot?' hot':'')+'">висит '+t.carried+' смен</span>':'');
   }
-  h+='</div><div class="tc">';
+  h+='</div>';
+  if(S.tasker&&!t.done)h+='<a class="tc-b" href="'+esc(S.tasker)+'" target="_blank" rel="noopener" '+
+    'data-a="tcopy:'+t.id+'" style="text-decoration:none;display:inline-block;margin-right:14px">В doit.ok ↗</a>';
+  h+='<div class="tc">';
   cm.forEach(function(c){h+='<div class="tc-i"><b>'+esc(c.by)+' · '+when(c.at)+'</b><br>'+esc(c.text)+'</div>'});
   h+='<div class="tc-f"><input type="text" id="cm-'+t.id+'" placeholder="Комментарий: что сделано или почему стоит">'+
      '<button data-a="cadd:'+t.id+'">→</button></div></div>';
@@ -831,7 +845,7 @@ function findGuest(name,phone){
   });
   return r;
 }
-var GF=[{k:'name',l:'Имя'},{k:'phone',l:'Телефон'},{k:'table',l:'Любимый стол'},
+var GF=[{k:'name',l:'Имя'},{k:'phone',l:'Телефон'},{k:'link',l:'Ссылка на карточку в DIOCRM'},{k:'table',l:'Любимый стол'},
         {k:'prefs',l:'Предпочтения: вино, посадка, темп подачи',a:1},
         {k:'allergy',l:'Аллергии и диеты',a:1},
         {k:'note',l:'Что важно знать',a:1}];
@@ -843,6 +857,7 @@ function guestHTML(g){
     (g.allergy?'<div style="font-size:11px;color:var(--red);margin-top:2px">'+esc(g.allergy)+'</div>':
       (g.prefs?'<div style="font-size:11px;color:var(--muted);margin-top:2px">'+esc(cut(g.prefs,58))+'</div>':''))+
     '</div><div class="blk-n">'+v.length+'</div><div class="blk-ar">▸</div></div><div class="blk-b">';
+  if(g.link)h+='<a class="btn ghost sm" href="'+esc(g.link)+'" target="_blank" rel="noopener" style="text-decoration:none;margin-bottom:12px">Карточка в DIOCRM ↗</a>';
   GF.forEach(function(f){
     var val=g[f.k]==null?'':g[f.k];
     var at='data-g="'+g.id+'" data-k="'+f.k+'"';
@@ -1027,6 +1042,16 @@ function toSheet(rows,quiet){
    .then(function(){if(!quiet)toast('Отправлено в таблицу')})
    .catch(function(){if(!quiet)toast('Не удалось отправить. Проверьте ссылку.')});
 }
+function copyText(txt){
+  try{
+    var ta0=document.createElement('textarea');
+    ta0.value=txt;ta0.style.cssText='position:fixed;left:-9999px';
+    document.body.appendChild(ta0);ta0.select();
+    var ok=document.execCommand('copy');ta0.remove();
+    if(ok){toast('Текст задачи скопирован');return}
+  }catch(e){}
+  if(navigator.clipboard)navigator.clipboard.writeText(txt).then(function(){toast('Текст задачи скопирован')});
+}
 function showExport(text){
   var m=document.createElement('div');m.className='mod';m.id='mod';
   m.innerHTML='<div class="mod-in"><div class="card-h">Выгрузка в таблицу</div>'+
@@ -1166,9 +1191,10 @@ function viewRep(){
 
   h+='<div class="card"><div class="card-h">Ссылки на смежные системы</div>'+
      '<div class="card-s">Открываются из блоков передачи одним тапом, чтобы не искать по вкладкам.</div>'+
-     '<div class="f"><label>Табель Workly</label><input type="text" data-set="workly" value="'+esc(S.workly||'')+'" placeholder="https://…workly…"></div>'+
-     '<div class="f"><label>CRM: карточки гостей</label><input type="text" data-set="crm" value="'+esc(S.crm||'')+'" placeholder="ссылка на CRM"></div>'+
-     '<div class="f"><label>Таск-менеджер</label><input type="text" data-set="tasker" value="'+esc(S.tasker||'')+'" placeholder="ссылка на доску задач"></div></div>';
+     '<div class="f"><label>DIOCRM — гости и брони</label><input type="text" data-set="crm" value="'+esc(S.crm||'')+'"></div>'+
+     '<div class="f"><label>doit.ok — задачи</label><input type="text" data-set="tasker" value="'+esc(S.tasker||'')+'"></div>'+
+     '<div class="f"><label>Бот отчётов — табель Workly</label><input type="text" data-set="workly" value="'+esc(S.workly||'')+'"></div>'+
+     '<div class="note">Источник истины по гостям — DIOCRM, по долгим задачам — doit.ok, по табелю — Workly. Передача смены на них ссылается, а не дублирует их.</div></div>';
   return h;
 }
 function k(v,l,cls){return '<div class="k"><div class="k-v'+(cls?' '+cls:'')+'">'+esc(v)+'</div><div class="k-l">'+esc(l)+'</div></div>'}
@@ -1389,6 +1415,11 @@ document.addEventListener('click',function(e){
       due:(mb.mk.due?it[mb.mk.due]:'')||'',from:cur||'',createdAt:Date.now(),carried:0,done:false,comments:[]});
     it.__task=nid;opened.__tasks=true;toast('Задача создана');
     return touch();
+  }
+  if(a==='tcopy'){
+    var tc=null;S.tasks.forEach(function(x){if(x.id===a1)tc=x});
+    if(tc)copyText(tc.text+(tc.owner?' — '+tc.owner:'')+(tc.due?' (до '+tc.due+')':''));
+    return;
   }
   if(a==='cadd'){
     var ci=document.getElementById('cm-'+a1);
