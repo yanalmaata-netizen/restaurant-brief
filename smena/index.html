@@ -48,8 +48,24 @@ h1 em{font-style:italic;color:var(--gold)}
 .card-h{font-family:'Cormorant Garamond',serif;font-size:20px;color:var(--gold);margin-bottom:4px}
 .card-s{font-size:12px;color:var(--muted);margin-bottom:12px}
 
+/* ОГЛАВЛЕНИЕ СМЕНЫ */
+.nav{display:flex;gap:7px;overflow-x:auto;padding:10px 0 12px;-webkit-overflow-scrolling:touch;scrollbar-width:none;
+  position:sticky;top:0;z-index:8;background:var(--dark);border-bottom:1px solid var(--border);margin-bottom:12px}
+.nav::-webkit-scrollbar{display:none}
+.nav button{flex:none;background:var(--dark2);border:1px solid var(--border);border-radius:20px;
+  color:var(--muted);font-family:inherit;font-size:12px;padding:8px 13px;cursor:pointer;white-space:nowrap}
+.nav button.ok{border-color:rgba(92,155,107,.45);color:var(--green)}
+.nav button.need{border-color:rgba(217,88,75,.5);color:var(--red)}
+.nav button:hover{border-color:var(--gold);color:var(--gold)}
+
+/* ХВОСТЫ С ПРОШЛОЙ СМЕНЫ */
+.tail{display:flex;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);font-size:13.5px;line-height:1.4}
+.tail:last-child{border-bottom:none}
+.tail b{flex:none;width:86px;font-weight:400;font-size:11px;color:var(--gold);letter-spacing:.04em;
+  text-transform:uppercase;padding-top:3px}
+
 /* БЛОКИ ПЕРЕДАЧИ */
-.blk{background:var(--dark2);border:1px solid var(--border);border-radius:12px;margin-bottom:10px;overflow:hidden}
+.blk{background:var(--dark2);border:1px solid var(--border);border-radius:12px;margin-bottom:10px;overflow:hidden;scroll-margin-top:62px}
 .blk.done{border-color:rgba(92,155,107,.4)}
 .blk.miss{border-color:rgba(217,88,75,.5)}
 .blk-h{display:flex;align-items:center;gap:10px;padding:14px 15px;cursor:pointer;user-select:none}
@@ -217,6 +233,7 @@ table.t td.n{text-align:center}
 .mod textarea{width:100%;min-height:190px;background:var(--dark3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:ui-monospace,Menlo,monospace;font-size:11px;padding:10px;outline:none;white-space:pre;overflow:auto}
 
 @media print{
+  .nav{display:none!important}
   body.pt .top,body.pt h1,body.pt .sub,body.pt .tabs,body.pt .search{display:none!important}
   body.pt #view>*{display:none!important}
   body.pt #gtable{display:block!important;border:none;padding:0}
@@ -240,7 +257,7 @@ table.t td.n{text-align:center}
     <div class="cloud" id="cloud" data-a="who"><b>—</b>локально</div>
   </div>
   <h1>Передача <em>смены</em></h1>
-  <div class="sub" id="place">Ресторан · <span id="ver">v4.6</span></div>
+  <div class="sub" id="place">Ресторан · <span id="ver">v5.0</span></div>
   <div class="tabs">
     <button class="tab on" data-v="home">Смена</button>
     <button class="tab" data-v="guests">Гости</button>
@@ -258,7 +275,7 @@ table.t td.n{text-align:center}
    Хранение: KV на сервере (побеждает) → localStorage → пусто.
    Правка схемы блоков — только в BLOCKS ниже.
    ============================================================ */
-var VER='4.6', LSKEY='guestup_smena_v1', MEKEY='guestup_smena_staff', API='/api/smena';
+var VER='5.0', LSKEY='guestup_smena_v1', MEKEY='guestup_smena_staff', API='/api/smena';
 
 /* ---------- СХЕМА БЛОКОВ ПЕРЕДАЧИ ---------- */
 var BLOCKS=[
@@ -272,10 +289,10 @@ var BLOCKS=[
          {k:'winesaid',ty:'chk',l:'Вино по бокалам и винные акценты озвучены'},
          {k:'allergysaid',ty:'chk',l:'Аллергии и диеты по сегодняшним броням озвучены'},
          {k:'banqsaid',ty:'chk',l:'План вечера по столам и банкетам разобран'},
-         {k:'focus',ty:'area',l:'Акцент дня: что продаём, на что смотрим'},
-         {k:'text',ty:'area',l:'О чём говорили, что спрашивали'}]},
+         {k:'focus',ty:'area',l:'Акцент дня: что продаём, на что смотрим'}],
+ item:[{k:'point',ty:'txt',l:'Проговорили'}]},
 
-{id:'hall',ic:'✨',ph:1,t:'Готовность зала',
+{id:'hall',ic:'✨',ph:1,t:'Готовность зала',in:['open'],
  hint:'Проход по залу до первого гостя. В fine dining это не формальность: гость видит стол раньше, чем меню.',
  fields:[{k:'tables',ty:'chk',l:'Сервировка выставлена по стандарту'},
          {k:'polish',ty:'chk',l:'Приборы и бокалы отполированы'},
@@ -288,6 +305,13 @@ var BLOCKS=[
          {k:'wc',ty:'chk',l:'Туалеты проверены и укомплектованы'},
          {k:'plan',ty:'chk',l:'План посадки на вечер распечатан и разобран'},
          {k:'note',ty:'area',l:'Что не готово и почему'}]},
+
+{id:'todo',ic:'✅',t:'Важные дела на смену',
+ hint:'Только то, что должно быть сделано в эту смену. Долгие задачи — в doit.ok, переходящие — в списке ниже.',
+ mk:{owner:'who',due:'',text:function(it){return (it.what||'')+(it.who?' — '+it.who:'')}},
+ item:[{k:'what',ty:'txt',l:'Что сделать'},
+       {k:'who',ty:'txt',l:'Кто'},
+       {k:'done',ty:'chk',l:'Сделано'}]},
 
 {id:'log',ic:'📝',ty:'log',t:'Журнал смены',
  hint:'Записывайте по ходу смены, а не в конце. Каждая запись со временем — потом видно, когда что случилось.'},
@@ -351,8 +375,8 @@ var BLOCKS=[
        {k:'action',ty:'area',l:'Что сделано, кто вызван'},
        {k:'deadline',ty:'txt',l:'Срок'}]},
 
-{id:'staff',ic:'👥',t:'Люди смены',
- hint:'То, чего нет ни в CRM, ни в таск-менеджере: кто как отработал сегодня. Через месяц по этим строкам видно, кого повышать, с кем говорить и кого вы вообще перестали замечать.',
+{id:'staff',ic:'👥',t:'Команда',
+ hint:'Заметки по людям: как отработал каждый сегодня. Этого нет ни в Dio, ни в doit.ok. Через месяц по этим строкам видно, кого повышать, с кем говорить и кого вы перестали замечать. История по человеку копится в «Отчёте» → «Сотрудники».',
  fields:[{k:'stations',ty:'area',l:'Расстановка по секциям на следующую смену'},
          {k:'tomorrow',ty:'area',l:'Кого не хватает и что с этим делать'}],
  item:[{k:'who',ty:'txt',l:'Кто'},
@@ -374,7 +398,7 @@ var BLOCKS=[
        {k:'action',ty:'area',l:'Что сделать: с кем поговорить, что проставить в табеле'},
        {k:'owner',ty:'txt',l:'Кто отрабатывает'}]},
 
-{id:'money',ic:'💰',t:'Касса',
+{id:'money',ic:'💰',t:'Касса',in:['pass'],
  confirm:'Касса пересчитана; расхождений нет либо расхождение описано выше',
  fields:[{k:'cash',ty:'num',l:'Наличные в кассе на конец, ₸',req:1},
          {k:'incass',ty:'num',l:'Инкассация, ₸'},
@@ -382,13 +406,13 @@ var BLOCKS=[
          {k:'diff',ty:'area',l:'Расхождения и чем объясняются'},
          {k:'voids',ty:'area',l:'Отменённые чеки, скидки, комплименты — с обоснованием'}]},
 
-{id:'summary',ic:'📊',t:'Итоги смены',
+{id:'summary',ic:'📊',t:'Итоги смены',in:['pass'],
  fields:[{k:'guests',ty:'num',l:'Гостей'},
          {k:'checks',ty:'num',l:'Чеков'},
          {k:'peak',ty:'txt',l:'Пик посадки'},
          {k:'note',ty:'area',l:'Как прошла смена'}]},
 
-{id:'closing',ic:'🔒',ph:1,t:'Закрытие и безопасность',
+{id:'closing',ic:'🔒',ph:1,t:'Закрытие и безопасность',in:['pass'],
  fields:[{k:'gas',ty:'chk',l:'Газ и плита выключены'},
          {k:'light',ty:'chk',l:'Свет и техника обесточены'},
          {k:'water',ty:'chk',l:'Вода перекрыта'},
@@ -472,10 +496,20 @@ function blk(id){for(var i=0;i<BLOCKS.length;i++)if(BLOCKS[i].id===id)return BLO
 function D(sh,bid){if(!sh.data[bid])sh.data[bid]={};return sh.data[bid]}
 function L(sh,bid){var d=D(sh,bid);if(!d.__list)d.__list=[];return d.__list}
 function shiftById(id){for(var i=0;i<S.shifts.length;i++)if(S.shifts[i].id===id)return S.shifts[i];return null}
-function partName(p){return p==='night'?'Вечер / закрытие':'Утро / открытие'}
+function partName(p){return p==='pass'?'Передача смены':'Открытие смены'}
+/* Открытие и передача — разные смены с разным набором блоков.
+   Блок без поля in показывается в обеих. */
+function blocksFor(sh){
+  var t=sh&&sh.part==='pass'?'pass':'open';
+  return BLOCKS.filter(function(b){return !b.in||b.in.indexOf(t)>=0});
+}
 
 /* ---------- ХРАНЕНИЕ ---------- */
 function norm(){S.staff=S.staff||[];S.guests=S.guests||[];S.tasks=S.tasks||[];S.shifts=S.shifts||[];
+  S.shifts.forEach(function(x){
+    if(x.part==='day')x.part='open';
+    if(x.part==='night')x.part='pass';
+  });
   /* Пустая строка из старого сохранения не должна перекрывать адрес:
      проверяем на пустоту, а не на null. */
   if(!S.crm)S.crm=LINKS.crm;
@@ -687,7 +721,7 @@ function tasksHTML(mode){
 function problems(sh){
   var p=[];
   if(!String(sh.to||'').trim())p.push('Не указано, кому передаёте смену');
-  BLOCKS.forEach(function(b){
+  blocksFor(sh).forEach(function(b){
     (b.fields||[]).forEach(function(f){
       if(f.req&&!String(fval(sh,b.id,f.k)).trim())p.push(b.t+' — не заполнено «'+f.l+'»');
     });
@@ -697,7 +731,57 @@ function problems(sh){
 }
 
 /* ---------- ЭКРАН СМЕНЫ ---------- */
-var errs=[];
+var errs=[], jumpTo='';
+function navHTML(sh,mode){
+  var h='<div class="nav">';
+  blocksFor(sh).forEach(function(b){
+    var cls='';
+    if(mode==='accept')cls=(sh.ack||{})[b.id]?'ok':'need';
+    else if(mode==='edit'){
+      var need=(b.confirm&&!D(sh,b.id).__confirm)||
+               (b.fields||[]).some(function(f){return f.req&&!String(fval(sh,b.id,f.k)).trim()});
+      cls=need?'need':(filled(sh,b)?'ok':'');
+    }else cls=filled(sh,b)?'ok':'';
+    h+='<button class="'+cls+'" data-a="go:'+b.id+'">'+b.ic+' '+esc(b.t)+'</button>';
+  });
+  return h+'</div>';
+}
+function prevTail(sh){
+  var prev=null;
+  S.shifts.forEach(function(x){
+    if(x.id===sh.id||x.status!=='accepted')return;
+    if(!prev||(x.createdAt||0)>(prev.createdAt||0))prev=x;
+  });
+  if(!prev)return '';
+  var d=prev.data||{}, rows=[];
+  var st=String((d.kitchen||{}).stop||'').trim();
+  if(st)rows.push(['Стоп-лист',st]);
+  (((d.purchase||{}).__list)||[]).forEach(function(it){
+    if(it.status==='Не приехало'||it.status==='Горит'||it.status==='Нужно заказать')
+      rows.push(['Закупка',[it.what,it.status,it.when].filter(Boolean).join(' · ')]);
+  });
+  (((d.tech||{}).__list)||[]).forEach(function(it){
+    if(it.level==='Стоит полностью'||it.level==='Ограниченно')
+      rows.push(['Техника',[it.what,it.level,it.deadline].filter(Boolean).join(' · ')]);
+  });
+  (((d.guestcase||{}).__list)||[]).forEach(function(it){
+    if(it.kind==='Обещание гостю'&&it.status!=='Закрыто')
+      rows.push(['Обещание',[it.who,cut(it.what,90)].filter(Boolean).join(' — ')]);
+  });
+  (((d.workly||{}).__list)||[]).forEach(function(it){
+    rows.push(['Workly',[it.who,it.what].filter(Boolean).join(' — ')]);
+  });
+  var tm=String((d.staff||{}).tomorrow||'').trim();
+  if(tm)rows.push(['Команда',tm]);
+  if(!rows.length)return '';
+  var h='<div class="card warn"><div class="card-h">С прошлой смены</div>'+
+        '<div class="card-s">'+rus(prev.date)+' · '+partName(prev.part)+' · сдал '+esc(prev.from||'—')+
+        '. Это осталось незакрытым — проверьте прежде, чем начинать.</div>';
+  rows.slice(0,12).forEach(function(r){
+    h+='<div class="tail"><b>'+esc(r[0])+'</b><div>'+esc(r[1])+'</div></div>';
+  });
+  return h+'</div>';
+}
 function viewShift(){
   var sh=shiftById(cur);
   if(!sh){view='home';return viewHome()}
@@ -712,14 +796,14 @@ function viewShift(){
        S.staff.filter(function(x){return x.id!==sh.fromId}).map(function(x){
          return '<option'+(sh.to===x.name?' selected':'')+'>'+esc(x.name)+'</option>'}).join('')+
        '</select></div></div>';
-    var fb=0;BLOCKS.forEach(function(b){if(filled(sh,b))fb++});
-    h+='<div class="pg"><i style="width:'+Math.round(fb/BLOCKS.length*100)+'%"></i></div>'+
-       '<div class="card-s" style="margin:7px 0 0">Заполнено '+fb+' из '+BLOCKS.length+' блоков</div>';
+    var BF=blocksFor(sh), fb=0;BF.forEach(function(b){if(filled(sh,b))fb++});
+    h+='<div class="pg"><i style="width:'+Math.round(fb/BF.length*100)+'%"></i></div>'+
+       '<div class="card-s" style="margin:7px 0 0">Заполнено '+fb+' из '+BF.length+' блоков</div>';
   }else{
-    var need=BLOCKS.filter(function(b){return !(sh.ack||{})[b.id]}).length;
+    var need=blocksFor(sh).filter(function(b){return !(sh.ack||{})[b.id]}).length;
     h+='<div class="card-s">Сдал: '+esc(sh.from||'—')+' → Принимает: '+esc(sh.to||'—')+
        (sh.sentAt?' · передано в '+hhmm(sh.sentAt):'')+'</div>';
-    if(mode==='accept')h+='<div class="ro">Принято блоков: '+(BLOCKS.length-need)+' из '+BLOCKS.length+'</div>';
+    if(mode==='accept')h+='<div class="ro">Принято блоков: '+(blocksFor(sh).length-need)+' из '+blocksFor(sh).length+'</div>';
     if(mode==='view')h+='<div class="ro" style="color:var(--green)">✓ Смена принята '+esc(sh.acceptedBy||sh.to)+' в '+hhmm(sh.acceptedAt)+'</div>';
   }
   h+='</div>';
@@ -728,8 +812,10 @@ function viewShift(){
     h+='<div class="err"><b>Нельзя передать смену:</b><br>'+errs.map(function(e){return '· '+esc(e)}).join('<br>')+'</div>';
   }
 
+  h+=navHTML(sh,mode);
+  if(mode==='edit')h+=prevTail(sh);
   h+=tasksHTML(mode);
-  BLOCKS.forEach(function(b){h+=blockHTML(sh,b,mode)});
+  blocksFor(sh).forEach(function(b){h+=blockHTML(sh,b,mode)});
 
   if(mode==='view'){
     h+='<div class="btns"><button class="btn ghost" data-a="print">Печать / PDF</button></div>';
@@ -740,7 +826,7 @@ function barShift(){
   var sh=shiftById(cur);if(!sh)return '';
   if(sh.status==='draft')return '<button class="btn ghost" data-a="back">Позже</button><button class="btn" data-a="send">Передать смену</button>';
   if(sh.status==='sent'){
-    var all=BLOCKS.every(function(b){return (sh.ack||{})[b.id]});
+    var all=blocksFor(sh).every(function(b){return (sh.ack||{})[b.id]});
     return '<button class="btn ghost" data-a="reopen">Вернуть в работу</button>'+
            '<button class="btn" data-a="accept"'+(all?'':' disabled')+'>'+(all?'Принять смену':'Примите все блоки')+'</button>';
   }
@@ -793,7 +879,9 @@ function viewHome(){
     h+='<div class="card"><div class="card-h">Начать передачу</div>'+
       '<div class="card-s">Смена передаётся по блокам. Принимающий подтверждает каждый — как в отеле и на производстве.</div>'+
       '<div class="row2"><div class="f"><label>Дата</label><input type="date" id="ns-date" value="'+today()+'"></div>'+
-      '<div class="f"><label>Смена</label><select id="ns-part"><option value="day"'+(hnow<15?' selected':'')+'>Утро / открытие</option><option value="night"'+(hnow>=15?' selected':'')+'>Вечер / закрытие</option></select></div></div>'+
+      '<div class="f"><label>Какая смена</label><select id="ns-part">'+
+      '<option value="open"'+(hnow<15?' selected':'')+'>Открытие смены</option>'+
+      '<option value="pass"'+(hnow>=15?' selected':'')+'>Передача смены</option></select></div></div>'+
       '<div class="note">Сдаёт: '+esc(me)+'</div>'+
       '<button class="btn" data-a="new" style="margin-top:12px">Начать</button></div>';
   }
@@ -1009,10 +1097,10 @@ function shiftKPI(s){
   k.sent=s.sentAt?hhmm(s.sentAt):'';
   k.acc=s.acceptedAt?hhmm(s.acceptedAt):'';
   k.min=(s.sentAt&&s.acceptedAt)?Math.max(0,Math.round((s.acceptedAt-s.sentAt)/60000)):'';
-  var f=0;BLOCKS.forEach(function(b){if(filled(s,b))f++});
-  k.blocks=f;k.blocksPct=Math.round(f/BLOCKS.length*100);
-  k.closePct=pctChk(s,'closing');
-  k.hallPct=pctChk(s,'hall');
+  var BF=blocksFor(s), f=0;BF.forEach(function(b){if(filled(s,b))f++});
+  k.blocks=f;k.blocksPct=Math.round(f/BF.length*100);
+  k.closePct=(s.part==='pass')?pctChk(s,'closing'):'';
+  k.hallPct=(s.part==='open')?pctChk(s,'hall'):'';
   k.brief=(s.data.brief||{}).done?'да':'нет';
   k.guests=(s.data.summary||{}).guests||'';
   var g=((s.data.guestcase||{}).__list)||[];
@@ -1089,6 +1177,9 @@ function inPeriod(s){
   return (Date.now()-d.getTime())<=(period+1)*86400000;
 }
 function avg(a){return a.length?Math.round(a.reduce(function(x,y){return x+y},0)/a.length):0}
+function avgF(list,f){
+  return avg(list.map(function(x){return x[f]}).filter(function(v){return v!==''&&v!=null}));
+}
 function viewRep(){
   var list=S.shifts.filter(inPeriod);
   var acc=list.filter(function(s){return s.status==='accepted'});
@@ -1106,9 +1197,9 @@ function viewRep(){
 
   var KA=list.map(shiftKPI);
   function sum(f){return KA.reduce(function(a,x){return a+(+x[f]||0)},0)}
-  var hallAvg=avg(KA.map(function(x){return x.hallPct}));
-  var closeAvg=avg(KA.map(function(x){return x.closePct}));
-  var fullAvg=avg(KA.map(function(x){return x.blocksPct}));
+  var hallAvg=avgF(KA,'hallPct');
+  var closeAvg=avgF(KA,'closePct');
+  var fullAvg=avgF(KA,'blocksPct');
   var briefAll=KA.length?Math.round(KA.filter(function(x){return x.brief==='да'}).length/KA.length*100):0;
 
   h+='<div class="card"><div class="card-h">Стандарт</div>'+
@@ -1131,7 +1222,7 @@ function viewRep(){
     k(sum('noshow'),'не пришли без предупреждения')+
     k(sum('cancel'),'отмен в день брони')+
     k(sum('banqRisk'),'банкетов без предоплаты или меню',sum('banqRisk')?'bad':'good')+
-    k(KA.filter(function(x){return x.hallPct<100}).length,'смен с неполной готовностью зала')+
+    k(KA.filter(function(x){return x.hallPct!==''&&x.hallPct<100}).length,'смен с неполной готовностью зала')+
     '</div></div>';
 
   var mAll=[];
@@ -1250,6 +1341,11 @@ function render(){
   var bar=document.getElementById('bar'), bi=document.getElementById('barin');
   var b=view==='shift'?barShift():'';
   bi.innerHTML=b; bar.style.display=b?'block':'none';
+  if(jumpTo){
+    var jel=document.getElementById(jumpTo);
+    jumpTo='';
+    if(jel){jel.scrollIntoView({block:'start'});return}
+  }
   window.scrollTo(0,y);
 }
 
@@ -1339,12 +1435,13 @@ document.addEventListener('click',function(e){
   }
 
   if(a==='tog'){opened[a1]=!opened[a1];return render()}
+  if(a==='go'){opened[a1]=true;jumpTo='b-'+a1;return render()}
   if(a==='back'){view='home';cur=null;errs=[];return render()}
   if(a==='open'){
     cur=a1;view='shift';errs=[];
     var s0=shiftById(a1);
     // Принимающий должен пройти все блоки — раскрываем их сразу.
-    if(s0&&s0.status==='sent'){opened={__tasks:true};BLOCKS.forEach(function(b){opened[b.id]=true})}
+    if(s0&&s0.status==='sent'){opened={__tasks:true};blocksFor(s0).forEach(function(b){opened[b.id]=true})}
     return render();
   }
 
