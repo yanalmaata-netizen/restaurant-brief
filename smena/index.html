@@ -257,7 +257,7 @@ table.t td.n{text-align:center}
     <div class="cloud" id="cloud" data-a="who"><b>—</b>локально</div>
   </div>
   <h1>Передача <em>смены</em></h1>
-  <div class="sub" id="place">Ресторан · <span id="ver">v5.0</span></div>
+  <div class="sub" id="place">Ресторан · <span id="ver">v5.1</span></div>
   <div class="tabs">
     <button class="tab on" data-v="home">Смена</button>
     <button class="tab" data-v="guests">Гости</button>
@@ -275,7 +275,7 @@ table.t td.n{text-align:center}
    Хранение: KV на сервере (побеждает) → localStorage → пусто.
    Правка схемы блоков — только в BLOCKS ниже.
    ============================================================ */
-var VER='5.0', LSKEY='guestup_smena_v1', MEKEY='guestup_smena_staff', API='/api/smena';
+var VER='5.1', LSKEY='guestup_smena_v1', MEKEY='guestup_smena_staff', API='/api/smena';
 
 /* ---------- СХЕМА БЛОКОВ ПЕРЕДАЧИ ---------- */
 var BLOCKS=[
@@ -1061,6 +1061,27 @@ function viewGuests(){
 var GOOD=['Отработал отлично','Похвалить при всех','Растёт — дать больше'];
 var WARN=['Нужен разговор','На грани, устал','Конфликт','Не вышел','Опоздал'];
 var sOpen={};
+function shortName(raw){return String(raw||'').split(',')[0].trim()}
+/* Аккаунты есть только у менеджеров, а заметки пишут про весь зал и кухню.
+   Поэтому команда собирается из имён в упоминаниях плюс владельцы аккаунтов. */
+function teamPeople(){
+  var map={}, order=[];
+  (S.staff||[]).forEach(function(x){
+    var k=x.name.toLowerCase();
+    map[k]={name:x.name,acc:x,role:x.role};order.push(k);
+  });
+  S.shifts.forEach(function(s){
+    ((((s.data||{}).staff||{}).__list)||[]).forEach(function(it){
+      var raw=String(it.who||'').trim();
+      var nm=shortName(raw);
+      if(nm.length<2)return;
+      var k=nm.toLowerCase();
+      if(!map[k]){map[k]={name:nm,acc:null,role:(raw.split(',')[1]||'').trim()};order.push(k)}
+      else if(!map[k].role)map[k].role=(raw.split(',')[1]||'').trim();
+    });
+  });
+  return order.map(function(k){return map[k]});
+}
 function mentions(name){
   var n=String(name||'').trim().toLowerCase(), out=[];
   if(n.length<2)return out;
@@ -1231,13 +1252,20 @@ function viewRep(){
   });
   var mGood=mAll.filter(function(x){return GOOD.indexOf(x)>=0}).length;
   var mWarn=mAll.filter(function(x){return WARN.indexOf(x)>=0}).length;
-  var unseen=S.staff.filter(function(x){return !mentions(x.name).length}).length;
+  var team=teamPeople();
+  var seen=team.filter(function(x){return mentions(x.name).length});
+  var onlyMinus=seen.filter(function(x){
+    var mn=mentions(x.name);
+    return !mn.some(function(m){return GOOD.indexOf(m.tag)>=0})&&
+            mn.some(function(m){return WARN.indexOf(m.tag)>=0});
+  }).length;
   h+='<div class="card"><div class="card-h">Люди</div>'+
      '<div class="card-s">Кого заметили за период и с каким знаком.</div><div class="kpi">'+
     k(mAll.length,'упоминаний в сменах')+
     k(mGood,'в плюс',mGood?'good':'')+
     k(mWarn,'в минус',mWarn?'bad':'')+
-    k(unseen,'сотрудников без единого упоминания',unseen?'bad':'good')+
+    k(seen.length,'человек в заметках')+
+    k(onlyMinus,'только с замечаниями, ни разу в плюс',onlyMinus?'bad':'good')+
     k(sum('noface'),'не прошли Face ID в Workly',sum('noface')?'bad':'good')+
     '</div></div>';
 
@@ -1264,22 +1292,26 @@ function viewRep(){
      '<div class="btns"><button class="btn ghost" data-a="excopy2">Скопировать таблицу</button>'+
      '<button class="btn ghost" data-a="excsv">Скачать CSV</button></div></div>';
 
-  h+='<div class="card"><div class="card-h">Сотрудники</div>'+
-     '<div class="card-s">Под этими именами стоят подписи в приёме смены. PIN разделяет ответственность между своими; от постороннего защищает Cloudflare Access на проекте.</div>';
-  S.staff.forEach(function(x){
+  h+='<div class="card"><div class="card-h">Команда и доступы</div>'+
+     '<div class="card-s">Аккаунт с PIN нужен только тем, кто сдаёт и принимает смену. Заметки копятся по всем, о ком пишут в блоке «Команда» — официантам, барменам, кухне.</div>';
+  teamPeople().forEach(function(x){
     var mn=mentions(x.name), g=mn.filter(function(m){return GOOD.indexOf(m.tag)>=0}).length,
         w=mn.filter(function(m){return WARN.indexOf(m.tag)>=0}).length;
-    h+='<div class="st-row" data-a="stog:'+x.id+'" style="cursor:pointer"><div class="st-n">'+
-       esc(x.name)+(x.id===meId?' · вы':'')+'<span>'+esc(x.role)+' · упоминаний '+mn.length+
+    var key=x.acc?x.acc.id:('n-'+x.name.toLowerCase());
+    h+='<div class="st-row" data-a="stog:'+esc(key)+'" style="cursor:pointer"><div class="st-n">'+
+       esc(x.name)+(x.acc&&x.acc.id===meId?' · вы':'')+'<span>'+
+       (x.acc?esc(x.acc.role)+' · вход по PIN':esc(x.role||'без доступа'))+
+       ' · упоминаний '+mn.length+
        (g?' · <b style="color:var(--green)">'+g+' в плюс</b>':'')+
        (w?' · <b style="color:var(--red)">'+w+' в минус</b>':'')+'</span></div>'+
-       '<div class="blk-ar" style="transform:rotate('+(sOpen[x.id]?'90':'0')+'deg)">▸</div></div>';
-    if(sOpen[x.id]){
+       '<div class="blk-ar" style="transform:rotate('+(sOpen[key]?'90':'0')+'deg)">▸</div></div>';
+    if(sOpen[key]){
       h+='<div style="padding:2px 0 12px">';
       if(!mn.length)h+='<div class="empty">Ни одного упоминания. Человека не замечают — это тоже сигнал.</div>';
       mn.slice(0,12).forEach(function(m){h+=mentionHTML(m)});
-      h+='<div class="btns"><button class="btn ghost sm" data-a="staffpin:'+x.id+'">Сменить PIN</button>'+
-         (isBoss()&&x.id!==meId?'<button class="btn ghost sm" data-a="staffdel:'+x.id+'">Удалить</button>':'')+'</div></div>';
+      if(x.acc)h+='<div class="btns"><button class="btn ghost sm" data-a="staffpin:'+x.acc.id+'">Сменить PIN</button>'+
+         (isBoss()&&x.acc.id!==meId?'<button class="btn ghost sm" data-a="staffdel:'+x.acc.id+'">Удалить доступ</button>':'')+'</div>';
+      h+='</div>';
     }
   });
   if(isBoss()){
