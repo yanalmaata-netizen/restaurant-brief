@@ -38,7 +38,7 @@ h1 em{font-style:italic;color:var(--gold)}
 
 /* ВКЛАДКИ */
 .tabs{display:flex;gap:6px;margin-bottom:20px;border-bottom:1px solid var(--border)}
-.tab{flex:1;background:none;border:none;color:var(--muted);font-family:inherit;font-size:11.5px;font-weight:400;padding:10px 2px;cursor:pointer;border-bottom:2px solid transparent;letter-spacing:.03em}
+.tab{flex:1;background:none;border:none;color:var(--muted);font-family:inherit;font-size:13px;font-weight:400;padding:11px 4px;cursor:pointer;border-bottom:2px solid transparent;letter-spacing:.03em}
 .tab.on{color:var(--gold);border-bottom-color:var(--gold)}
 
 /* КАРТОЧКИ */
@@ -48,15 +48,15 @@ h1 em{font-style:italic;color:var(--gold)}
 .card-h{font-family:'Cormorant Garamond',serif;font-size:20px;color:var(--gold);margin-bottom:4px}
 .card-s{font-size:12px;color:var(--muted);margin-bottom:12px}
 
-/* ОГЛАВЛЕНИЕ СМЕНЫ */
-.nav{display:flex;gap:7px;overflow-x:auto;padding:10px 0 12px;-webkit-overflow-scrolling:touch;scrollbar-width:none;
-  position:sticky;top:0;z-index:8;background:var(--dark);border-bottom:1px solid var(--border);margin-bottom:12px}
-.nav::-webkit-scrollbar{display:none}
-.nav button{flex:none;background:var(--dark2);border:1px solid var(--border);border-radius:20px;
-  color:var(--muted);font-family:inherit;font-size:12px;padding:8px 13px;cursor:pointer;white-space:nowrap}
-.nav button.ok{border-color:rgba(92,155,107,.45);color:var(--green)}
-.nav button.need{border-color:rgba(217,88,75,.5);color:var(--red)}
-.nav button:hover{border-color:var(--gold);color:var(--gold)}
+/* СПИСОК БЛОКОВ В ОБЗОРЕ */
+.row{display:flex;align-items:center;gap:12px;padding:14px 0;border-bottom:1px solid var(--border);cursor:pointer}
+.row:last-of-type{border-bottom:none}
+.row-ic{font-size:18px;line-height:1;flex:none;width:24px;text-align:center}
+.row-t{flex:1;font-size:14.5px;min-width:0}
+.row-t span{display:block;font-size:11.5px;color:var(--muted);margin-top:2px}
+.row-s{flex:none;width:9px;height:9px;border-radius:50%;background:var(--border)}
+.row-s.ok{background:var(--green)}
+.row-s.need{background:var(--red)}
 
 /* ХВОСТЫ С ПРОШЛОЙ СМЕНЫ */
 .tail{display:flex;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);font-size:13.5px;line-height:1.4}
@@ -233,7 +233,6 @@ table.t td.n{text-align:center}
 .mod textarea{width:100%;min-height:190px;background:var(--dark3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:ui-monospace,Menlo,monospace;font-size:11px;padding:10px;outline:none;white-space:pre;overflow:auto}
 
 @media print{
-  .nav{display:none!important}
   body.pt .top,body.pt h1,body.pt .sub,body.pt .tabs,body.pt .search{display:none!important}
   body.pt #view>*{display:none!important}
   body.pt #gtable{display:block!important;border:none;padding:0}
@@ -257,13 +256,12 @@ table.t td.n{text-align:center}
     <div class="cloud" id="cloud" data-a="who"><b>—</b>локально</div>
   </div>
   <h1>Передача <em>смены</em></h1>
-  <div class="sub" id="place">Ресторан · <span id="ver">v5.1</span></div>
+  <div class="sub" id="place">Ресторан · <span id="ver">v6.0</span></div>
   <div class="tabs">
     <button class="tab on" data-v="home">Смена</button>
     <button class="tab" data-v="guests">Гости</button>
     <button class="tab" data-v="tasks">Задачи</button>
-    <button class="tab" data-v="rep">Отчёт</button>
-    <button class="tab" data-v="arch">Архив</button>
+    <button class="tab" data-v="more">Ещё</button>
   </div>
   <main id="view"></main>
 </div>
@@ -275,7 +273,7 @@ table.t td.n{text-align:center}
    Хранение: KV на сервере (побеждает) → localStorage → пусто.
    Правка схемы блоков — только в BLOCKS ниже.
    ============================================================ */
-var VER='5.1', LSKEY='guestup_smena_v1', MEKEY='guestup_smena_staff', API='/api/smena';
+var VER='6.0', LSKEY='guestup_smena_v1', MEKEY='guestup_smena_staff', API='/api/smena';
 
 /* ---------- СХЕМА БЛОКОВ ПЕРЕДАЧИ ---------- */
 var BLOCKS=[
@@ -466,7 +464,7 @@ var LINKS={
   workly:'https://t.me/dio_reports_bot'                        /* бот отчётов, ведёт в Workly */
 };
 var S={rev:0,place:'Ресторан',sheet:'',crm:LINKS.crm,tasker:LINKS.tasker,workly:LINKS.workly,
-       staff:[],guests:[],shifts:[],tasks:[]};
+       off:{},extra:[],staff:[],guests:[],shifts:[],tasks:[]};
 var meId=localStorage.getItem(MEKEY)||'', me='';
 var loginPick=null, loginErr='';
 var view='home', cur=null, opened={}, cloudOK=false, savedAt='';
@@ -492,7 +490,18 @@ function rus(iso){if(!iso)return '';var p=String(iso).split('-');return p.length
 function fmt(n){if(n===''||n==null)return '';var v=String(n).replace(/\s/g,'');if(isNaN(v))return n;return Number(v).toLocaleString('ru-RU')}
 function hhmm(ts){if(!ts)return '';var d=new Date(ts);return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')}
 function toast(m){var t=document.getElementById('toast');t.textContent=m;t.classList.add('on');clearTimeout(t._x);t._x=setTimeout(function(){t.classList.remove('on')},2600)}
-function blk(id){for(var i=0;i<BLOCKS.length;i++)if(BLOCKS[i].id===id)return BLOCKS[i];return null}
+/* Готовые блоки плюс свои, добавленные из интерфейса. Свои — чистые данные,
+   без функций, чтобы уезжали в KV как есть. */
+function allBlocks(){return BLOCKS.concat(S.extra||[])}
+function blk(id){var a=allBlocks();for(var i=0;i<a.length;i++)if(a[i].id===id)return a[i];return null}
+function makeBlock(t,ic,where,kind){
+  var b={id:'x'+uid(),ic:ic||'📌',t:t,custom:true};
+  if(where!=='both')b.in=[where];
+  if(kind==='list')b.item=[{k:'what',ty:'txt',l:'Что'},{k:'note',ty:'area',l:'Подробности'}];
+  else if(kind==='check')b.item=[{k:'what',ty:'txt',l:'Пункт'},{k:'done',ty:'chk',l:'Сделано'}];
+  else b.fields=[{k:'text',ty:'area',l:'Заметка'}];
+  return b;
+}
 function D(sh,bid){if(!sh.data[bid])sh.data[bid]={};return sh.data[bid]}
 function L(sh,bid){var d=D(sh,bid);if(!d.__list)d.__list=[];return d.__list}
 function shiftById(id){for(var i=0;i<S.shifts.length;i++)if(S.shifts[i].id===id)return S.shifts[i];return null}
@@ -500,12 +509,15 @@ function partName(p){return p==='pass'?'Передача смены':'Откры
 /* Открытие и передача — разные смены с разным набором блоков.
    Блок без поля in показывается в обеих. */
 function blocksFor(sh){
-  var t=sh&&sh.part==='pass'?'pass':'open';
-  return BLOCKS.filter(function(b){return !b.in||b.in.indexOf(t)>=0});
+  var t=sh&&sh.part==='pass'?'pass':'open', off=S.off||{};
+  return allBlocks().filter(function(b){
+    return !off[b.id] && (!b.in||b.in.indexOf(t)>=0);
+  });
 }
 
 /* ---------- ХРАНЕНИЕ ---------- */
 function norm(){S.staff=S.staff||[];S.guests=S.guests||[];S.tasks=S.tasks||[];S.shifts=S.shifts||[];
+  S.off=S.off||{};S.extra=S.extra||[];
   S.shifts.forEach(function(x){
     if(x.part==='day')x.part='open';
     if(x.part==='night')x.part='pass';
@@ -533,7 +545,8 @@ function loadCloud(){
 function saveCloud(force){
   if(!cloudOK)return Promise.resolve();
   var body={rev:S.rev,state:{place:S.place,sheet:S.sheet||'',workly:S.workly||'',crm:S.crm||'',
-    tasker:S.tasker||'',staff:S.staff,guests:S.guests,shifts:S.shifts,tasks:S.tasks},force:!!force};
+    tasker:S.tasker||'',off:S.off,extra:S.extra,staff:S.staff,guests:S.guests,
+    shifts:S.shifts,tasks:S.tasks},force:!!force};
   return fetch(API,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
    .then(function(r){
      if(r.status===409){
@@ -732,20 +745,6 @@ function problems(sh){
 
 /* ---------- ЭКРАН СМЕНЫ ---------- */
 var errs=[], jumpTo='';
-function navHTML(sh,mode){
-  var h='<div class="nav">';
-  blocksFor(sh).forEach(function(b){
-    var cls='';
-    if(mode==='accept')cls=(sh.ack||{})[b.id]?'ok':'need';
-    else if(mode==='edit'){
-      var need=(b.confirm&&!D(sh,b.id).__confirm)||
-               (b.fields||[]).some(function(f){return f.req&&!String(fval(sh,b.id,f.k)).trim()});
-      cls=need?'need':(filled(sh,b)?'ok':'');
-    }else cls=filled(sh,b)?'ok':'';
-    h+='<button class="'+cls+'" data-a="go:'+b.id+'">'+b.ic+' '+esc(b.t)+'</button>';
-  });
-  return h+'</div>';
-}
 function prevTail(sh){
   var prev=null;
   S.shifts.forEach(function(x){
@@ -782,51 +781,95 @@ function prevTail(sh){
   });
   return h+'</div>';
 }
+var step=null;   /* null — обзор смены, число — шаг мастера */
+
+/* Обзор: одна страница со списком блоков. Ничего не раскрыто. */
+function rowStatus(sh,b,mode){
+  if(mode==='accept')return (sh.ack||{})[b.id]?['ok','принято']:['need','принять'];
+  var bad=(b.confirm&&!D(sh,b.id).__confirm)||
+          (b.fields||[]).some(function(f){return f.req&&!String(fval(sh,b.id,f.k)).trim()});
+  if(bad&&mode==='edit')return ['need','нужно'];
+  var n=filled(sh,b);
+  return n?['ok',n+'']:['','пусто'];
+}
 function viewShift(){
   var sh=shiftById(cur);
   if(!sh){view='home';return viewHome()}
   var mode=sh.status==='draft'?'edit':(sh.status==='sent'?'accept':'view');
-  var h='<button class="btn ghost sm" data-a="back" style="margin-bottom:14px">← Назад</button>';
+  var BF=blocksFor(sh);
+  if(step!=null&&BF[step])return viewStep(sh,BF,mode);
+  step=null;
 
+  var h='<button class="btn ghost sm" data-a="back" style="margin-bottom:14px">← К списку смен</button>';
   h+='<div class="card accent"><div class="card-h">'+rus(sh.date)+' · '+partName(sh.part)+'</div>';
   if(mode==='edit'){
-    h+='<div class="card-s">Заполняйте по блокам. Всё сохраняется само.</div>'+
-       '<div class="row2"><div class="f"><label>Сдаёт</label><input type="text" data-h="from" value="'+esc(sh.from)+'"></div>'+
-       '<div class="f"><label>Принимает *</label><select data-h="to"><option value="">—</option>'+
+    var fb=0;BF.forEach(function(b){if(filled(sh,b))fb++});
+    h+='<div class="card-s">Сдаёт '+esc(sh.from||'—')+'. Заполняйте по одному блоку — всё сохраняется само.</div>'+
+       '<div class="f"><label>Кому передаёте *</label><select data-h="to"><option value="">—</option>'+
        S.staff.filter(function(x){return x.id!==sh.fromId}).map(function(x){
          return '<option'+(sh.to===x.name?' selected':'')+'>'+esc(x.name)+'</option>'}).join('')+
-       '</select></div></div>';
-    var BF=blocksFor(sh), fb=0;BF.forEach(function(b){if(filled(sh,b))fb++});
-    h+='<div class="pg"><i style="width:'+Math.round(fb/BF.length*100)+'%"></i></div>'+
-       '<div class="card-s" style="margin:7px 0 0">Заполнено '+fb+' из '+BF.length+' блоков</div>';
+       '</select></div>'+
+       '<div class="pg"><i style="width:'+Math.round(fb/BF.length*100)+'%"></i></div>'+
+       '<div class="card-s" style="margin:7px 0 0">Заполнено '+fb+' из '+BF.length+'</div>'+
+       '<button class="btn" data-a="step:'+Math.max(0,BF.findIndex(function(b){return !filled(sh,b)}))+'" style="margin-top:12px">'+
+       (fb?'Продолжить заполнение':'Начать заполнять')+'</button>';
   }else{
-    var need=blocksFor(sh).filter(function(b){return !(sh.ack||{})[b.id]}).length;
-    h+='<div class="card-s">Сдал: '+esc(sh.from||'—')+' → Принимает: '+esc(sh.to||'—')+
+    var need=BF.filter(function(b){return !(sh.ack||{})[b.id]}).length;
+    h+='<div class="card-s">Сдал '+esc(sh.from||'—')+' → принимает '+esc(sh.to||'—')+
        (sh.sentAt?' · передано в '+hhmm(sh.sentAt):'')+'</div>';
-    if(mode==='accept')h+='<div class="ro">Принято блоков: '+(blocksFor(sh).length-need)+' из '+blocksFor(sh).length+'</div>';
-    if(mode==='view')h+='<div class="ro" style="color:var(--green)">✓ Смена принята '+esc(sh.acceptedBy||sh.to)+' в '+hhmm(sh.acceptedAt)+'</div>';
+    if(mode==='accept'){
+      h+='<div class="pg"><i style="width:'+Math.round((BF.length-need)/BF.length*100)+'%"></i></div>'+
+         '<div class="card-s" style="margin:7px 0 0">Принято '+(BF.length-need)+' из '+BF.length+'</div>'+
+         '<button class="btn" data-a="step:'+Math.max(0,BF.findIndex(function(b){return !(sh.ack||{})[b.id]}))+'" style="margin-top:12px">'+
+         (need===BF.length?'Начать приём':'Продолжить приём')+'</button>';
+    }
+    if(mode==='view')h+='<div class="ro" style="color:var(--green)">✓ Приняла смену: '+esc(sh.acceptedBy||sh.to)+', '+hhmm(sh.acceptedAt)+'</div>';
   }
   h+='</div>';
 
-  if(errs.length){
-    h+='<div class="err"><b>Нельзя передать смену:</b><br>'+errs.map(function(e){return '· '+esc(e)}).join('<br>')+'</div>';
-  }
-
-  h+=navHTML(sh,mode);
+  if(errs.length)h+='<div class="err"><b>Нельзя передать смену:</b><br>'+errs.map(function(e){return '· '+esc(e)}).join('<br>')+'</div>';
   if(mode==='edit')h+=prevTail(sh);
-  h+=tasksHTML(mode);
-  blocksFor(sh).forEach(function(b){h+=blockHTML(sh,b,mode)});
 
-  if(mode==='view'){
-    h+='<div class="btns"><button class="btn ghost" data-a="print">Печать / PDF</button></div>';
-  }
+  var ot=openTasks().length;
+  h+='<div class="card"><div class="card-h">Блоки смены</div>'+
+     '<div class="card-s">Тап по строке — открыть и заполнить.</div>';
+  h+='<div class="row" data-a="tasks"><div class="row-ic">📋</div>'+
+     '<div class="row-t">Переходящие задачи<span>'+(ot?ot+' открыто':'всё закрыто')+'</span></div>'+
+     '<div class="blk-ar">▸</div></div>';
+  BF.forEach(function(b,i){
+    var st=rowStatus(sh,b,mode);
+    h+='<div class="row" data-a="step:'+i+'"><div class="row-ic">'+b.ic+'</div>'+
+       '<div class="row-t">'+esc(b.t)+'<span>'+esc(st[1])+'</span></div>'+
+       '<div class="row-s '+st[0]+'"></div><div class="blk-ar">▸</div></div>';
+  });
+  h+='</div>';
+
+  if(mode==='view')h+='<div class="btns"><button class="btn ghost" data-a="print">Печать / PDF</button></div>';
+  return h;
+}
+
+/* Мастер: ровно один блок на экране. */
+function viewStep(sh,BF,mode){
+  var b=BF[step];
+  opened[b.id]=true;
+  var h='<button class="btn ghost sm" data-a="overview" style="margin-bottom:12px">← Все блоки</button>';
+  h+='<div class="card accent" style="padding:12px 16px"><div class="card-s" style="margin:0">'+
+     'Шаг '+(step+1)+' из '+BF.length+' · '+rus(sh.date)+' · '+partName(sh.part)+'</div>'+
+     '<div class="pg" style="margin-top:9px"><i style="width:'+Math.round((step+1)/BF.length*100)+'%"></i></div></div>';
+  h+=blockHTML(sh,b,mode);
   return h;
 }
 function barShift(){
   var sh=shiftById(cur);if(!sh)return '';
+  var BF=blocksFor(sh);
+  if(step!=null&&BF[step]){
+    var last=step>=BF.length-1;
+    return '<button class="btn ghost" data-a="prev"'+(step?'':' disabled')+'>Назад</button>'+
+           '<button class="btn" data-a="next">'+(last?'Готово':'Далее')+'</button>';
+  }
   if(sh.status==='draft')return '<button class="btn ghost" data-a="back">Позже</button><button class="btn" data-a="send">Передать смену</button>';
   if(sh.status==='sent'){
-    var all=blocksFor(sh).every(function(b){return (sh.ack||{})[b.id]});
+    var all=BF.every(function(b){return (sh.ack||{})[b.id]});
     return '<button class="btn ghost" data-a="reopen">Вернуть в работу</button>'+
            '<button class="btn" data-a="accept"'+(all?'':' disabled')+'>'+(all?'Принять смену':'Примите все блоки')+'</button>';
   }
@@ -1102,6 +1145,52 @@ function mentionHTML(m){
     (m.by?'<div class="le-w">записал '+esc(m.by)+'</div>':'')+'</div></div>';
 }
 
+/* ---------- ЭКРАН: НАСТРОЙКА БЛОКОВ ---------- */
+function viewBlocks(){
+  var off=S.off||{};
+  var h='<div class="card"><div class="card-h">Настройка блоков</div>'+
+    '<div class="card-s">Выключенный блок пропадает из смены, но всё, что в нём уже записано, остаётся в архиве. Свои блоки можно удалять.</div>';
+  allBlocks().forEach(function(b){
+    var whereTxt=!b.in?'открытие и передача':(b.in[0]==='open'?'только открытие':'только передача');
+    h+='<div class="st-row"><div class="st-n">'+b.ic+' '+esc(b.t)+
+       '<span>'+whereTxt+(b.custom?' · свой':'')+'</span></div>'+
+       '<label class="chk" style="padding:0"><input type="checkbox" data-a="btog:'+b.id+'"'+(off[b.id]?'':' checked')+'></label>'+
+       (b.custom?'<button class="btn ghost sm" data-a="bdel:'+b.id+'">×</button>':'')+'</div>';
+  });
+  h+='</div>';
+  h+='<div class="card"><div class="card-h">Добавить свой блок</div>'+
+     '<div class="card-s">Появится в смене сразу, у обоих менеджеров.</div>'+
+     '<div class="f"><label>Название</label><input type="text" id="nb-t" placeholder="Например: Доставка"></div>'+
+     '<div class="row2"><div class="f"><label>Значок</label><input type="text" id="nb-ic" value="📌" maxlength="2"></div>'+
+     '<div class="f"><label>Где показывать</label><select id="nb-w">'+
+     '<option value="both">Открытие и передача</option>'+
+     '<option value="open">Только открытие</option>'+
+     '<option value="pass">Только передача</option></select></div></div>'+
+     '<div class="f"><label>Что внутри</label><select id="nb-k">'+
+     '<option value="text">Заметка — одно поле текста</option>'+
+     '<option value="list">Список — позиции с подробностями</option>'+
+     '<option value="check">Чек-лист — пункты с галочками</option></select></div>'+
+     '<button class="btn" data-a="badd">Добавить блок</button></div>';
+  return h;
+}
+
+/* ---------- ЭКРАН: ЕЩЁ ---------- */
+function viewMore(){
+  var h='<div class="card"><div class="card-h">Ещё</div><div style="margin-top:6px">';
+  [['rep','📈','Отчёт и KPI','показатели, команда, выгрузка, ссылки'],
+   ['arch','🗄','Архив смен','все смены с поиском'],
+   ['blocks','⚙️','Настройка блоков','включить, выключить, добавить свой']
+  ].forEach(function(x){
+    h+='<div class="row" data-a="goto:'+x[0]+'"><div class="row-ic">'+x[1]+'</div>'+
+       '<div class="row-t">'+esc(x[2])+'<span>'+esc(x[3])+'</span></div><div class="blk-ar">▸</div></div>';
+  });
+  h+='</div></div>';
+  h+='<div class="card"><div class="card-h">Заведение</div>'+
+     '<div class="f"><label>Название</label><input type="text" data-set="place" value="'+esc(S.place)+'"></div>'+
+     '<div class="note">Вы вошли как '+esc(me)+'. Чтобы выйти — нажмите на имя в правом верхнем углу.</div></div>';
+  return h;
+}
+
 /* ---------- KPI И ВЫГРУЗКА ---------- */
 /* Считаем то же, что меряют Jolt, Zenput и Trail: процент выполнения,
    скорость закрытия и что осталось незакрытым. */
@@ -1358,7 +1447,10 @@ function viewArch(){
 function render(){
   var y=window.scrollY;
   document.getElementById('place').innerHTML=esc(S.place)+' · <span id="ver">v'+VER+'</span>';
-  document.querySelectorAll('.tab').forEach(function(t){t.classList.toggle('on',t.dataset.v===view||(view==='shift'&&t.dataset.v==='home'))});
+  var group={shift:'home',rep:'more',arch:'more',blocks:'more'};
+  document.querySelectorAll('.tab').forEach(function(t){
+    t.classList.toggle('on',t.dataset.v===view||t.dataset.v===group[view]);
+  });
   var v=document.getElementById('view');
   var tabs=document.querySelector('.tabs'), bar0=document.getElementById('bar');
   if(!currentStaff()){
@@ -1369,6 +1461,7 @@ function render(){
   }
   tabs.style.display='';
   v.innerHTML=view==='shift'?viewShift():view==='guests'?viewGuests():view==='tasks'?viewTasks():
+              view==='more'?viewMore():view==='blocks'?viewBlocks():
               view==='rep'?viewRep():view==='arch'?viewArch():viewHome();
   var bar=document.getElementById('bar'), bi=document.getElementById('barin');
   var b=view==='shift'?barShift():'';
@@ -1468,12 +1561,44 @@ document.addEventListener('click',function(e){
 
   if(a==='tog'){opened[a1]=!opened[a1];return render()}
   if(a==='go'){opened[a1]=true;jumpTo='b-'+a1;return render()}
-  if(a==='back'){view='home';cur=null;errs=[];return render()}
+  if(a==='goto'){view=a1;return render()}
+  if(a==='btog'){
+    if(!isBoss()){toast('Настраивать блоки может только управляющий');return}
+    S.off=S.off||{};
+    if(S.off[a1])delete S.off[a1]; else S.off[a1]=true;
+    return touch();
+  }
+  if(a==='bdel'){
+    if(!isBoss()){toast('Удалять блоки может только управляющий');return}
+    var bb=blk(a1);
+    if(!bb||!confirm('Удалить блок «'+bb.t+'»? Записанное в прошлых сменах останется в архиве.'))return;
+    S.extra=(S.extra||[]).filter(function(x){return x.id!==a1});
+    S.off=S.off||{};delete S.off[a1];
+    return touch();
+  }
+  if(a==='badd'){
+    if(!isBoss()){toast('Добавлять блоки может только управляющий');return}
+    var nt=(document.getElementById('nb-t').value||'').trim();
+    if(nt.length<2){toast('Впишите название блока');return}
+    S.extra=S.extra||[];
+    S.extra.push(makeBlock(nt,(document.getElementById('nb-ic').value||'📌').trim(),
+      document.getElementById('nb-w').value,document.getElementById('nb-k').value));
+    toast('Блок добавлен');return touch();
+  }
+  if(a==='step'){step=+a1;jumpTo='';return render()}
+  if(a==='overview'){step=null;micStop();return render()}
+  if(a==='next'){
+    var BFn=blocksFor(sh);
+    micStop();
+    step=(step>=BFn.length-1)?null:step+1;
+    window.scrollTo(0,0);return render();
+  }
+  if(a==='prev'){micStop();step=(step>0)?step-1:null;window.scrollTo(0,0);return render()}
+  if(a==='tasks'){opened.__tasks=true;step=null;view='tasks';return render()}
+  if(a==='back'){view='home';cur=null;errs=[];step=null;return render()}
   if(a==='open'){
-    cur=a1;view='shift';errs=[];
-    var s0=shiftById(a1);
-    // Принимающий должен пройти все блоки — раскрываем их сразу.
-    if(s0&&s0.status==='sent'){opened={__tasks:true};blocksFor(s0).forEach(function(b){opened[b.id]=true})}
+    cur=a1;view='shift';errs=[];step=null;
+    opened={__tasks:true};
     return render();
   }
 
@@ -1591,7 +1716,7 @@ document.addEventListener('click',function(e){
 
   if(a==='send'){
     errs=problems(sh);
-    if(errs.length){render();window.scrollTo(0,0);return}
+    if(errs.length){step=null;render();window.scrollTo(0,0);return}
     sh.status='sent';sh.sentAt=Date.now();
     touch();saveCloud();
     toast('Смена передана. Принимающий подтверждает блоки.');
@@ -1656,7 +1781,7 @@ document.addEventListener('change',function(e){
 },false);
 
 document.querySelectorAll('.tab').forEach(function(b){
-  b.addEventListener('click',function(){view=b.dataset.v;cur=null;errs=[];render()});
+  b.addEventListener('click',function(){view=b.dataset.v;cur=null;errs=[];step=null;micStop();render()});
 });
 document.getElementById('place').addEventListener('click',function(){
   var pn=prompt('Название заведения:',S.place);
