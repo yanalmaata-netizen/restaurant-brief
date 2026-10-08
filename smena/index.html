@@ -256,7 +256,7 @@ table.t td.n{text-align:center}
     <div class="cloud" id="cloud" data-a="who"><b>—</b>локально</div>
   </div>
   <h1>Передача <em>смены</em></h1>
-  <div class="sub" id="place">Ресторан · <span id="ver">v6.1</span></div>
+  <div class="sub" id="place">Ресторан · <span id="ver">v6.2</span></div>
   <div class="tabs">
     <button class="tab on" data-v="home">Смена</button>
     <button class="tab" data-v="guests">Гости</button>
@@ -273,7 +273,7 @@ table.t td.n{text-align:center}
    Хранение: KV на сервере (побеждает) → localStorage → пусто.
    Правка схемы блоков — только в BLOCKS ниже.
    ============================================================ */
-var VER='6.1', LSKEY='guestup_smena_v1', MEKEY='guestup_smena_staff', API='/api/smena';
+var VER='6.2', LSKEY='guestup_smena_v1', MEKEY='guestup_smena_staff', API='/api/smena';
 
 /* ---------- СХЕМА БЛОКОВ ПЕРЕДАЧИ ---------- */
 var BLOCKS=[
@@ -468,6 +468,7 @@ var S={rev:0,place:'Ресторан',sheet:'',crm:LINKS.crm,tasker:LINKS.tasker
 var meId=localStorage.getItem(MEKEY)||'', me='';
 var loginPick=null, loginErr='';
 var newCode='', recoverMode=false;
+var loginName='', recCode='', recWho='';
 var view='home', cur=null, opened={}, cloudOK=false, savedAt='';
 
 /* ---------- СОТРУДНИКИ И ВХОД ---------- */
@@ -905,9 +906,9 @@ function viewLogin(){
       return h;
     }
     h+='<div class="card-s">Введите код восстановления и задайте новый PIN.</div>'+
-       '<div class="f"><label>Код восстановления</label><input type="text" id="rc-code" placeholder="ABCD-EFGH" autocapitalize="characters"></div>'+
+       '<div class="f"><label>Код восстановления</label><input type="text" id="rc-code" value="'+esc(recCode)+'" placeholder="ABCD-EFGH" autocapitalize="characters"></div>'+
        '<div class="f"><label>Кому меняем PIN</label><select id="rc-who">'+
-       S.staff.map(function(x){return '<option value="'+x.id+'">'+esc(x.name)+'</option>'}).join('')+'</select></div>'+
+       S.staff.map(function(x){return '<option value="'+x.id+'"'+(recWho===x.id?' selected':'')+'>'+esc(x.name)+'</option>'}).join('')+'</select></div>'+
        '<div class="f"><label>Новый PIN</label><input class="pin" type="password" inputmode="numeric" maxlength="6" id="rc-pin"></div>'+
        '<div class="f"><label>Повторите</label><input class="pin" type="password" inputmode="numeric" maxlength="6" id="rc-pin2"></div>'+
        '<div class="btns"><button class="btn ghost" data-a="recoff">Назад</button>'+
@@ -917,7 +918,7 @@ function viewLogin(){
   if(!S.staff.length){
     h+='<div class="card accent"><div class="card-h">Первый вход</div>'+
       '<div class="card-s">Создайте себя как управляющего. Дальше добавите остальных менеджеров во вкладке «Отчёт».</div>'+
-      '<div class="f"><label>Имя</label><input type="text" id="lg-name" placeholder="Как вас зовут"></div>'+
+      '<div class="f"><label>Имя</label><input type="text" id="lg-name" value="'+esc(loginName)+'" placeholder="Как вас зовут"></div>'+
       '<div class="f"><label>PIN — четыре цифры</label><input class="pin" type="password" inputmode="numeric" maxlength="6" id="lg-pin"></div>'+
       '<div class="f"><label>Повторите PIN</label><input class="pin" type="password" inputmode="numeric" maxlength="6" id="lg-pin2"></div>'+
       '<button class="btn" data-a="first">Создать и войти</button></div>';
@@ -1554,13 +1555,13 @@ document.addEventListener('click',function(e){
   if(a==='first'){
     var nm=(document.getElementById('lg-name').value||'').trim();
     var p1=document.getElementById('lg-pin').value, p2=document.getElementById('lg-pin2').value;
-    loginErr='';
+    loginName=nm;loginErr='';
     if(nm.length<2)loginErr='Впишите имя';
     else if(!/^\d{4,6}$/.test(p1))loginErr='PIN — от четырёх до шести цифр';
     else if(p1!==p2)loginErr='PIN не совпал, введите ещё раз';
     if(loginErr)return render();
     var st={id:uid(),name:nm,pin:hashPin(p1),role:'Управляющий',createdAt:Date.now()};
-    S.staff.push(st);setMe(st);
+    S.staff.push(st);setMe(st);loginName='';
     newCode=genCode();S.recover=hashPin(newCode);
     cloudStatus();return touch();
   }
@@ -1572,7 +1573,7 @@ document.addEventListener('click',function(e){
     var code=(document.getElementById('rc-code').value||'').trim().toUpperCase();
     var who=document.getElementById('rc-who').value;
     var r1=document.getElementById('rc-pin').value, r2=document.getElementById('rc-pin2').value;
-    loginErr='';
+    recCode=code;recWho=who;loginErr='';
     if(!S.recover||hashPin(code)!==S.recover)loginErr='Код восстановления не подошёл';
     else if(!/^\d{4,6}$/.test(r1))loginErr='PIN — от четырёх до шести цифр';
     else if(r1!==r2)loginErr='PIN не совпал, введите ещё раз';
@@ -1580,6 +1581,7 @@ document.addEventListener('click',function(e){
     var rst=staffById(who);
     if(!rst){loginErr='Сотрудник не найден';return render()}
     rst.pin=hashPin(r1);
+    recCode='';recWho='';
     setMe(rst);recoverMode=false;view='home';cloudStatus();
     toast('PIN изменён, вы вошли');
     return touch();
