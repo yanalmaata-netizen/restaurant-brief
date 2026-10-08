@@ -256,7 +256,7 @@ table.t td.n{text-align:center}
     <div class="cloud" id="cloud" data-a="who"><b>—</b>локально</div>
   </div>
   <h1>Передача <em>смены</em></h1>
-  <div class="sub" id="place">Ресторан · <span id="ver">v6.0</span></div>
+  <div class="sub" id="place">Ресторан · <span id="ver">v6.1</span></div>
   <div class="tabs">
     <button class="tab on" data-v="home">Смена</button>
     <button class="tab" data-v="guests">Гости</button>
@@ -273,7 +273,7 @@ table.t td.n{text-align:center}
    Хранение: KV на сервере (побеждает) → localStorage → пусто.
    Правка схемы блоков — только в BLOCKS ниже.
    ============================================================ */
-var VER='6.0', LSKEY='guestup_smena_v1', MEKEY='guestup_smena_staff', API='/api/smena';
+var VER='6.1', LSKEY='guestup_smena_v1', MEKEY='guestup_smena_staff', API='/api/smena';
 
 /* ---------- СХЕМА БЛОКОВ ПЕРЕДАЧИ ---------- */
 var BLOCKS=[
@@ -467,6 +467,7 @@ var S={rev:0,place:'Ресторан',sheet:'',crm:LINKS.crm,tasker:LINKS.tasker
        off:{},extra:[],staff:[],guests:[],shifts:[],tasks:[]};
 var meId=localStorage.getItem(MEKEY)||'', me='';
 var loginPick=null, loginErr='';
+var newCode='', recoverMode=false;
 var view='home', cur=null, opened={}, cloudOK=false, savedAt='';
 
 /* ---------- СОТРУДНИКИ И ВХОД ---------- */
@@ -480,6 +481,13 @@ function setMe(st){
   meId=st.id;me=st.name;localStorage.setItem(MEKEY,meId);
 }
 function isBoss(){var st=currentStaff();return !!st&&st.role==='Управляющий'}
+/* Запасной вход: если управляющий забыл PIN, без кода восстановления данные
+   заперты навсегда. Код показывается один раз и хранится свёрткой, как PIN. */
+function genCode(){
+  var a='ACDEFHJKLMNPQRTUVWXY34679', r='';
+  for(var i=0;i<8;i++){r+=a.charAt(Math.floor(Math.random()*a.length));if(i===3)r+='-'}
+  return r;
+}
 
 /* ---------- УТИЛИТЫ ---------- */
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
@@ -545,7 +553,7 @@ function loadCloud(){
 function saveCloud(force){
   if(!cloudOK)return Promise.resolve();
   var body={rev:S.rev,state:{place:S.place,sheet:S.sheet||'',workly:S.workly||'',crm:S.crm||'',
-    tasker:S.tasker||'',off:S.off,extra:S.extra,staff:S.staff,guests:S.guests,
+    tasker:S.tasker||'',recover:S.recover||'',off:S.off,extra:S.extra,staff:S.staff,guests:S.guests,
     shifts:S.shifts,tasks:S.tasks},force:!!force};
   return fetch(API,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
    .then(function(r){
@@ -876,10 +884,36 @@ function barShift(){
   return '';
 }
 
+/* ---------- ЭКРАН: КОД ВОССТАНОВЛЕНИЯ ---------- */
+function viewCode(){
+  return '<div class="card accent"><div class="card-h">Сохраните код восстановления</div>'+
+    '<div class="card-s">Этим кодом сбрасывается забытый PIN — любому из менеджеров. Он показывается один раз: запишите его или положите в заметки. Потерять код и PIN одновременно — значит потерять доступ к сменам.</div>'+
+    '<div class="pin" style="letter-spacing:.18em;font-size:26px;margin-bottom:12px">'+esc(newCode)+'</div>'+
+    '<div class="btns"><button class="btn ghost" data-a="copycode">Скопировать</button>'+
+    '<button class="btn" data-a="codeok">Я записал</button></div></div>';
+}
+
 /* ---------- ЭКРАН: ВХОД ---------- */
 function viewLogin(){
   var h='';
   if(loginErr)h+='<div class="err">'+esc(loginErr)+'</div>';
+  if(recoverMode){
+    h+='<div class="card accent"><div class="card-h">Забыли PIN</div>';
+    if(!S.recover){
+      h+='<div class="card-s">Код восстановления для этого заведения не задан, сбросить PIN нечем. Зайдите под вторым менеджером: управляющий меняет чужой PIN в разделе «Команда и доступы».</div>'+
+         '<button class="btn ghost" data-a="recoff">Назад</button></div>';
+      return h;
+    }
+    h+='<div class="card-s">Введите код восстановления и задайте новый PIN.</div>'+
+       '<div class="f"><label>Код восстановления</label><input type="text" id="rc-code" placeholder="ABCD-EFGH" autocapitalize="characters"></div>'+
+       '<div class="f"><label>Кому меняем PIN</label><select id="rc-who">'+
+       S.staff.map(function(x){return '<option value="'+x.id+'">'+esc(x.name)+'</option>'}).join('')+'</select></div>'+
+       '<div class="f"><label>Новый PIN</label><input class="pin" type="password" inputmode="numeric" maxlength="6" id="rc-pin"></div>'+
+       '<div class="f"><label>Повторите</label><input class="pin" type="password" inputmode="numeric" maxlength="6" id="rc-pin2"></div>'+
+       '<div class="btns"><button class="btn ghost" data-a="recoff">Назад</button>'+
+       '<button class="btn" data-a="dorecover">Сбросить PIN и войти</button></div></div>';
+    return h;
+  }
   if(!S.staff.length){
     h+='<div class="card accent"><div class="card-h">Первый вход</div>'+
       '<div class="card-s">Создайте себя как управляющего. Дальше добавите остальных менеджеров во вкладке «Отчёт».</div>'+
@@ -893,14 +927,15 @@ function viewLogin(){
     h+='<div class="card"><div class="card-h">Кто на смене</div>'+
        '<div class="card-s">Выберите себя и введите PIN. Под вашим именем будет стоять подпись под приёмом смены.</div><div class="who">';
     S.staff.forEach(function(x){h+='<button data-a="pick:'+x.id+'">'+esc(x.name)+'</button>'});
-    return h+'</div></div>';
+    return h+'</div><button class="tc-b" data-a="recon" style="margin-top:12px">Забыли PIN?</button></div>';
   }
   var st=staffById(loginPick);
   h+='<div class="card accent"><div class="card-h">'+esc(st?st.name:'')+'</div>'+
      '<div class="card-s">Введите PIN</div>'+
      '<input class="pin" type="password" inputmode="numeric" maxlength="6" id="lg-pin" autofocus>'+
      '<div class="btns"><button class="btn ghost" data-a="pickback">Назад</button>'+
-     '<button class="btn" data-a="login">Войти</button></div></div>';
+     '<button class="btn" data-a="login">Войти</button></div>'+
+     '<button class="tc-b" data-a="recon" style="margin-top:10px">Забыли PIN?</button></div>';
   return h;
 }
 
@@ -1408,7 +1443,10 @@ function viewRep(){
        '<div class="f"><label>Имя</label><input type="text" id="sa-name"></div>'+
        '<div class="f"><label>PIN</label><input type="text" inputmode="numeric" maxlength="6" id="sa-pin"></div></div>'+
        '<div class="f"><label>Роль</label><select id="sa-role"><option>Менеджер</option><option>Управляющий</option></select></div>'+
-       '<button class="btn ghost sm" data-a="staffadd">+ Добавить сотрудника</button></div>';
+       '<button class="btn ghost sm" data-a="staffadd">+ Добавить сотрудника</button></div>'+
+       '<div class="btns"><button class="btn ghost sm" data-a="newcode">Новый код восстановления</button></div>'+
+       '<div class="note">Код сбрасывает забытый PIN любому менеджеру. '+
+       (S.recover?'Выпущен — если потеряли, выпустите новый.':'<b style="color:var(--red)">Не выпущен: если забудете PIN, доступ к сменам потеряется.</b>')+'</div>';
   }
   h+='</div>';
 
@@ -1453,6 +1491,10 @@ function render(){
   });
   var v=document.getElementById('view');
   var tabs=document.querySelector('.tabs'), bar0=document.getElementById('bar');
+  if(newCode){
+    tabs.style.display='none';bar0.style.display='none';
+    v.innerHTML=viewCode();window.scrollTo(0,0);return;
+  }
   if(!currentStaff()){
     tabs.style.display='none';bar0.style.display='none';
     v.innerHTML=viewLogin();
@@ -1518,7 +1560,35 @@ document.addEventListener('click',function(e){
     else if(p1!==p2)loginErr='PIN не совпал, введите ещё раз';
     if(loginErr)return render();
     var st={id:uid(),name:nm,pin:hashPin(p1),role:'Управляющий',createdAt:Date.now()};
-    S.staff.push(st);setMe(st);cloudStatus();return touch();
+    S.staff.push(st);setMe(st);
+    newCode=genCode();S.recover=hashPin(newCode);
+    cloudStatus();return touch();
+  }
+  if(a==='codeok'){newCode='';return render()}
+  if(a==='copycode'){copyText(newCode);return}
+  if(a==='recon'){recoverMode=true;loginPick=null;loginErr='';return render()}
+  if(a==='recoff'){recoverMode=false;loginErr='';return render()}
+  if(a==='dorecover'){
+    var code=(document.getElementById('rc-code').value||'').trim().toUpperCase();
+    var who=document.getElementById('rc-who').value;
+    var r1=document.getElementById('rc-pin').value, r2=document.getElementById('rc-pin2').value;
+    loginErr='';
+    if(!S.recover||hashPin(code)!==S.recover)loginErr='Код восстановления не подошёл';
+    else if(!/^\d{4,6}$/.test(r1))loginErr='PIN — от четырёх до шести цифр';
+    else if(r1!==r2)loginErr='PIN не совпал, введите ещё раз';
+    if(loginErr)return render();
+    var rst=staffById(who);
+    if(!rst){loginErr='Сотрудник не найден';return render()}
+    rst.pin=hashPin(r1);
+    setMe(rst);recoverMode=false;view='home';cloudStatus();
+    toast('PIN изменён, вы вошли');
+    return touch();
+  }
+  if(a==='newcode'){
+    if(!isBoss()){toast('Перевыпустить код может только управляющий');return}
+    if(!confirm('Выпустить новый код восстановления? Старый перестанет работать.'))return;
+    newCode=genCode();S.recover=hashPin(newCode);
+    return touch();
   }
   if(a==='pick'){loginPick=a1;loginErr='';return render()}
   if(a==='pickback'){loginPick=null;loginErr='';return render()}
